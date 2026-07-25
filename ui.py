@@ -55,12 +55,9 @@ class ScreenplayPlayer:
         self.script.pack(side="left", fill="both", expand=True)
 
         # highlight styles
-
-        self.script.tag_configure("current", background="#ffd54f", foreground="black")
         self.script.tag_configure("gen", background="#eeeeee", foreground="black")
-
+        self.script.tag_configure("current", background="#ffd54f", foreground="black")
         self.script.tag_configure("character", foreground="#1565c0")
-
         self.script.tag_configure("narration", foreground="#555555")
 
         # output

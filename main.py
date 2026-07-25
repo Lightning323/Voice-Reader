@@ -191,13 +191,11 @@ def play_audio(audio):
         32767
     ).astype(np.int16)
 
-    # duration in seconds
-    sample_rate = 24000
-    duration = len(audio) / sample_rate
-
     sound = pygame.mixer.Sound(buffer=audio.tobytes())
+    delay = max(0, sound.get_length())
     sound.play()
-    # time.sleep(duration - 1)
+    # print(delay)
+    time.sleep(delay)
 
 def playback(readerUI):
     while not shutdown_event.is_set():
