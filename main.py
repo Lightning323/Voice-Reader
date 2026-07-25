@@ -50,10 +50,9 @@ gen_thread = None
 
 
 class AudioSample:
-    def __init__(self, audio, start, end):
+    def __init__(self, audio, line):
         self.audio = audio
-        self.start = start
-        self.end = end
+        self.line = line
 
 
 # ============================
@@ -61,14 +60,14 @@ class AudioSample:
 # ============================
 
 
-def generate_audio(text, voice, speed, start, end):
+def generate_audio(text, voice, speed, line):
     generator = pipeline(text, voice=voice, speed=speed)
     for _, _, audio in generator:
         if generation_stop.is_set():
             return
         while True:
             try:
-                audio_queue.put(AudioSample(audio, start, end), timeout=0.1)
+                audio_queue.put(AudioSample(audio, line), timeout=0.1)
                 break
             except queue.Full:
                 if generation_stop.is_set():
@@ -82,7 +81,6 @@ def queue_script_audio(readerUI, scriptLines):
             break
         speed = 1
         if readerUI:
-            readerUI.log(f'{line.character}: "{line.sentence}"')
             readerUI.highlight_gen(f"{line.start}.0", f"{line.end}.end")
             speed = readerUI.speed.get()
 
@@ -91,7 +89,7 @@ def queue_script_audio(readerUI, scriptLines):
             if line.character in CHARACTER_VOICES
             else NARRATOR_VOICE
         )
-        generate_audio(line.sentence, voice, speed, line.start, line.end)
+        generate_audio(line.sentence, voice, speed, line)
 
 
 # ============================
@@ -218,7 +216,8 @@ def playback(readerUI):
             continue
 
         if readerUI:
-            readerUI.highlight_playback(f"{sample.start}.0", f"{sample.end}.end")
+            readerUI.highlight_playback(f"{sample.line.start}.0", f"{sample.line.end}.end")
+            readerUI.log(f'{sample.line.character}: "{sample.line.sentence}"')
         play_audio(sample.audio)
 
     print("Playback thread exited")
