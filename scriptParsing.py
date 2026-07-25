@@ -11,6 +11,13 @@ class ScriptLine:
     def __str__(self):
         return f"{self.character}: \"{self.sentence}\" ({self.start}-{self.end})"
 
+def add_script_lines(script_lines, dialogue, character, start, end):
+    speech = ". ".join(dialogue)
+    for sentence in split_sentences(speech):
+        script_lines.append(
+            ScriptLine(speech, sentence, character, start, end)
+        )
+
 def parse_script(text, character_voices):
     script_lines = []
     #Get the lines
@@ -40,11 +47,8 @@ def parse_script(text, character_voices):
             while i < len(lines) and lines[i].strip():
                 dialogue.append(lines[i].strip())
                 i += 1
-            
             end = i + 1
-            speech = ". ".join(dialogue)
-            for sentence in split_sentences(speech):
-                script_lines.append( ScriptLine(speech, sentence, character, start, end))
+            add_script_lines(script_lines, dialogue, character, start, end)
 
         # -------------------------
         # If we dont have a character, it must be NARRATION
@@ -59,13 +63,9 @@ def parse_script(text, character_voices):
                 and lines[i].upper() not in character_voices
             ):
                 narration.append(lines[i].strip())
-
                 i += 1
-
             end = i + 1
-            speech = ". ".join(narration)
-            for sentence in split_sentences(speech):
-                script_lines.append( ScriptLine(speech, sentence, "NARRATOR", start, end))
+            add_script_lines(script_lines, narration, "NARRATOR", start, end)
 
     # for line in script_lines:
     #     print(line,"\n")
