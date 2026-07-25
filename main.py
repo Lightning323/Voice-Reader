@@ -218,6 +218,7 @@ def playback(readerUI):
         if readerUI:
             readerUI.highlight_playback(f"{sample.line.start}.0", f"{sample.line.end}.end")
             readerUI.log(f'{sample.line.character}: "{sample.line.sentence}"')
+            readerUI.set_status(f'{sample.line.character}')
         play_audio(sample.audio)
 
     print("Playback thread exited")
