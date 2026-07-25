@@ -8,8 +8,9 @@ pause_flag = False
 
 class ScreenplayPlayer:
 
-    def __init__(self, playRunnable=None):
+    def __init__(self, playRunnable=None, stopRunnable=None):
         self.playRunnable = playRunnable
+        self.stopRunnable = stopRunnable
 
         self.root = tk.Tk()
         self.root.title("Screenplay Player")
@@ -117,8 +118,6 @@ class ScreenplayPlayer:
         global stop_flag
         stop_flag = False
         text = self.script.get("1.0", "end")
-
-        print("Playing...")
         self.playRunnable(self, text)
 
     def pause(self):
@@ -128,7 +127,7 @@ class ScreenplayPlayer:
     def stop(self):
         global stop_flag
         stop_flag = True
-        self.log("Stopped")
+        self.stopRunnable(self)
 
     # ========================================================
     # PARSER

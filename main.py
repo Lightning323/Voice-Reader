@@ -1,8 +1,5 @@
-import threading
-import re
 import sounddevice as sd
 import queue
-import threading
 import ui
 
 # ============================================================
@@ -37,8 +34,14 @@ import threading
 import scriptParsing
 import time
 
-finished_generation = False
-audio_queue = queue.Queue(maxsize=20)
+stop_event = threading.Event()
+finished_generation = threading.Event()
+
+QUEUE_SIZE = 10
+audio_queue = queue.Queue(maxsize=QUEUE_SIZE)
+
+play_thread = None
+gen_thread = None
 
 class AudioSample: #Our class for an audio chunk
     def __init__(self, audio, start, end):
@@ -46,19 +49,18 @@ class AudioSample: #Our class for an audio chunk
         self.start = start
         self.end = end
 
-def generate_audio(text, voice, speed, start, end):
+def generate_audio(text, voice, speed, start, end, stop_event):
     generator = pipeline(text, voice=voice, speed=speed)
     for _, _, audio in generator:
+        if stop_event.is_set():
+            return
         audio_queue.put(AudioSample(audio, start, end))
     audio_queue.put(None)
-    print("<GENERATED> ", text)
 
-
-def queue_script_audio(readerUI, scriptLines):
+def queue_script_audio(readerUI, scriptLines, stop_event):
     try:
-        finished_generation = False
         for line in scriptLines:
-            if ui.stop_flag:
+            if stop_event.is_set():
                 break
             speed = 1
             if readerUI:
@@ -69,49 +71,75 @@ def queue_script_audio(readerUI, scriptLines):
                 if line.character in CHARACTER_VOICES
                 else NARRATOR_VOICE
             )
-            generate_audio(line.sentence, voice, speed, line.start, line.end)
+            generate_audio(
+                line.sentence,
+                voice,
+                speed,
+                line.start,
+                line.end,
+                stop_event
+            )
     finally:
-        print("Finished")
-        finished_generation = True
+        print("Finished generation")
+        finished_generation.set()
 
-
-def playback(readerUI):
+def playback(readerUI, stop_event):
     time.sleep(1)
-    while finished_generation is False or ui.stop_flag:
-        sample = audio_queue.get()
-        if sample is None: #Wait until audio is generated
+    while not stop_event.is_set() or not finished_generation.is_set():
+        try:
+            sample = audio_queue.get(timeout=0.5)
+        except queue.Empty:
             time.sleep(1)
             continue
 
-        if readerUI:
-            readerUI.highlight_playback(f"{sample.start}.0", f"{sample.end}.end")
-        sd.play(sample.audio, samplerate=24000)
-        sd.wait()
-
-
-# ============================================================
-# PLAYBACK
-# ============================================================
+        if sample:
+            if readerUI:
+                readerUI.highlight_playback(f"{sample.start}.0", f"{sample.end}.end")
+            sd.play(sample.audio, samplerate=24000)
+            sd.wait()
 
 
 def play(readerUI, text):
-    script_lines = scriptParsing.parse_script(text, CHARACTER_VOICES)
-    print(len(script_lines), " lines parsed.")
+    global play_thread, gen_thread, audio_queue
 
-    play_thread = threading.Thread(target=playback, args=(readerUI,), daemon=True)
+    stop_event.clear()
+    finished_generation.clear()
+
+    script_lines = scriptParsing.parse_script(text, CHARACTER_VOICES)
+    print(len(script_lines), "lines parsed.")
+
+    play_thread = threading.Thread(
+        target=playback,
+        args=(readerUI, stop_event),
+        daemon=True
+    )
     play_thread.start()
 
-    gen_thread = threading.Thread(target=queue_script_audio, args=(readerUI, script_lines), daemon=True)
+    gen_thread = threading.Thread(
+        target=queue_script_audio,
+        args=(readerUI, script_lines, stop_event),
+        daemon=True
+    )
     gen_thread.start()
 
-    # play_thread.join()
-    # gen_thread.join()
-    print("Playback started")
+    readerUI.log("Playback started")
 
+
+def stop(readerUI):
+    stop_event.set()
+    sd.stop()
+
+    while not audio_queue.empty():
+        try:
+            audio_queue.get_nowait()
+        except queue.Empty:
+            break
+
+    readerUI.log("Stopping playback...")
 
 # ============================================================
 # START APP
 # ============================================================
 
-app = ui.ScreenplayPlayer(playRunnable=play)
+app = ui.ScreenplayPlayer(playRunnable=play, stopRunnable=stop)
 app.run()
