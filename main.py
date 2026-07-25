@@ -58,7 +58,7 @@ bm_lewis
 
 
 class Character:
-    def __init__(self, voice, speed_multiplier, volume_multiplier=1):
+    def __init__(self, voice, speed_multiplier, volume_multiplier=.5):
         self.voice = voice
         self.speed_multiplier = speed_multiplier
         self.volume_multiplier = volume_multiplier
@@ -67,7 +67,7 @@ class Character:
 CHARACTER_VOICES = {
     "RAMIREZ": Character("af_aoede", 1),
     "PATEL": Character("am_eric", 1),
-    "CARTER": Character("am_michael", 1, 10),
+    "CARTER": Character("am_michael", 1, 1),
     "ELANA": Character("af_nicole", 1),
 }
 

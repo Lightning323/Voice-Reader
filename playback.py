@@ -24,7 +24,7 @@ def play_audio(audio, volume_multiplier=1):
     ).astype(np.int16)
 
     sound = pygame.mixer.Sound(buffer=audio.tobytes())
-    sound.set_volume(max(0.0, min(10.0, volume_multiplier)))
+    sound.set_volume(max(0.0, min(1.0, volume_multiplier)))
     delay = max(0, sound.get_length())
     sound.play()
     # print(delay)
