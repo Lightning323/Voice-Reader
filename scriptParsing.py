@@ -12,7 +12,11 @@ class ScriptLine:
         return f"{self.character}: \"{self.sentence}\" ({self.start}-{self.end})"
 
 def add_script_lines(script_lines, dialogue, character, start, end):
-    speech = ". ".join(dialogue)
+    speech = " ".join(dialogue)
+    speech = remove_parenthesis(speech)
+
+    # if speech == "":
+    #     return
     for sentence in split_sentences(speech):
         script_lines.append(
             ScriptLine(speech, sentence, character, start, end)
@@ -28,7 +32,6 @@ def parse_script(text, character_voices):
 
     while i < len(lines):
         line = lines[i].strip()
-        line = preformat_text(line)
 
         if not line:
             i += 1
@@ -67,12 +70,11 @@ def parse_script(text, character_voices):
             end = i + 1
             add_script_lines(script_lines, narration, "NARRATOR", start, end)
 
-    # for line in script_lines:
-    #     print(line,"\n")
+
     return script_lines
 
 
-def preformat_text(text):
+def remove_parenthesis(text):
     return re.sub(r"\([^)]*\)", "", text)
 
 def split_sentences(text):
