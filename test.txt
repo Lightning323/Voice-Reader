@@ -1,28 +1,26 @@
 ELANA
-How close are we getting? Can we inform astralius yet?
+Test
 
 PATEL
-We are getting close. But the data is still too complex.
-
-We see the inside of a space observatory, filled with people. There are observers standing around the edge of the room, trying to analyze the data coming in. Glowing vacuum tubes and reel-to-reel data recorders are seen as the observers work.
+Test
 
 ARRIS
-Elana, your vitals suggest higher levels of caffeine than is recommended for humans. Shall I dim the lights until you regain your senses?
+Narratoin narration
 
 ELANA
 (Without looking up) Mute yourself, Arris. I’m trying to focus.
 
 ARRIS
-You’ve been chasing this for ten hours. At eleven, I am legally obligated to plan your memorial service.
+Test
 
 PATEL
-If we log this in the central ICAS database, the High Command will have it within the hour. You know which way the wind is blowing in the Council.
+Test
 
 ELANA
-What about the data on those matrix calculations? Did we get the cross-check from the sister observatory?
+TEst
 
 PATEL
-Yes. The field data suggests more than just the prime numbers. We’ve confirmed a Fibonacci derivative pattern. It’s a language, Elana. A system of units for a physics we don't even understand yet.
+Test
 
 ELANA
 … Have we determined anything else?

@@ -34,112 +34,170 @@ import threading
 import scriptParsing
 import time
 
-stop_event = threading.Event()
-finished_generation = threading.Event()
+# ============================
+# AUDIO STATE
+# ============================
 
-QUEUE_SIZE = 10
+play_event = threading.Event()  # Playback allowed
+shutdown_event = threading.Event()  # App closing
+generation_stop = threading.Event()  # Stop current generation
+
+QUEUE_SIZE = 20
 audio_queue = queue.Queue(maxsize=QUEUE_SIZE)
 
-play_thread = None
 gen_thread = None
 
-class AudioSample: #Our class for an audio chunk
+
+class AudioSample:
     def __init__(self, audio, start, end):
         self.audio = audio
         self.start = start
         self.end = end
 
-def generate_audio(text, voice, speed, start, end, stop_event):
+
+# ============================
+# AUDIO GENERATION
+# ============================
+
+def generate_audio(text, voice, speed, start, end):
     generator = pipeline(text, voice=voice, speed=speed)
     for _, _, audio in generator:
-        if stop_event.is_set():
+        if generation_stop.is_set():
             return
-        audio_queue.put(AudioSample(audio, start, end))
+        while True:
+            try:
+                audio_queue.put(AudioSample(audio, start, end), timeout=0.1)
+                break
+            except queue.Full:
+                if generation_stop.is_set():
+                    return
     audio_queue.put(None)
 
-def queue_script_audio(readerUI, scriptLines, stop_event):
-    try:
-        for line in scriptLines:
-            if stop_event.is_set():
-                break
-            speed = 1
-            if readerUI:
-                readerUI.highlight_gen(f"{line.start}.0", f"{line.end}.end")
-                speed = readerUI.speed.get()
-            voice = (
-                CHARACTER_VOICES[line.character]
-                if line.character in CHARACTER_VOICES
-                else NARRATOR_VOICE
-            )
-            generate_audio(
-                line.sentence,
-                voice,
-                speed,
-                line.start,
-                line.end,
-                stop_event
-            )
-    finally:
-        print("Finished generation")
-        finished_generation.set()
 
-def playback(readerUI, stop_event):
-    time.sleep(1)
-    while not stop_event.is_set() or not finished_generation.is_set():
-        try:
-            sample = audio_queue.get(timeout=0.5)
-        except queue.Empty:
-            time.sleep(1)
-            continue
+def queue_script_audio(readerUI, scriptLines):
+    for line in scriptLines:
+        if generation_stop.is_set():
+            break
+        speed = 1
+        if readerUI:
+            readerUI.highlight_gen(f"{line.start}.0", f"{line.end}.end")
+            speed = readerUI.speed.get()
 
-        if sample:
-            if readerUI:
-                readerUI.highlight_playback(f"{sample.start}.0", f"{sample.end}.end")
-            sd.play(sample.audio, samplerate=24000)
-            sd.wait()
+        voice = (
+            CHARACTER_VOICES[line.character]
+            if line.character in CHARACTER_VOICES
+            else NARRATOR_VOICE
+        )
 
+        generate_audio(line.sentence, voice, speed, line.start, line.end)
+
+
+
+
+# ============================
+# BUTTON ACTIONS
+# ============================
 
 def play(readerUI, text):
-    global play_thread, gen_thread, audio_queue
+    global gen_thread
 
-    stop_event.clear()
-    finished_generation.clear()
+    # Resume playback
+    play_event.set()
+
+    # Stop old generation if any
+    generation_stop.set()
+
+    if gen_thread and gen_thread.is_alive():
+        gen_thread.join()
+
+    # Clear old audio
+    clear_audio_queue()
+
+    generation_stop.clear()
 
     script_lines = scriptParsing.parse_script(text, CHARACTER_VOICES)
+
     print(len(script_lines), "lines parsed.")
 
-    play_thread = threading.Thread(
-        target=playback,
-        args=(readerUI, stop_event),
-        daemon=True
-    )
-    play_thread.start()
-
     gen_thread = threading.Thread(
-        target=queue_script_audio,
-        args=(readerUI, script_lines, stop_event),
-        daemon=True
+        target=queue_script_audio, args=(readerUI, script_lines), daemon=True
     )
+
     gen_thread.start()
 
     readerUI.log("Playback started")
 
 
 def stop(readerUI):
-    stop_event.set()
+    global gen_thread
+
+    # Pause playback
+    play_event.clear()
+
+    # Stop audio immediately
     sd.stop()
 
+    # Stop generating
+    generation_stop.set()
+
+    clear_audio_queue()
+    readerUI.log("Playback stopped...")
+
+
+def clear_audio_queue():
     while not audio_queue.empty():
         try:
             audio_queue.get_nowait()
         except queue.Empty:
             break
 
-    readerUI.log("Stopping playback...")
+
+def shutdown():
+    print("Shutting down...")
+    shutdown_event.set()
+    # Wake playback thread
+    play_event.set()
+    sd.stop()
+
 
 # ============================================================
 # START APP
 # ============================================================
 
 app = ui.ScreenplayPlayer(playRunnable=play, stopRunnable=stop)
+app.root.protocol("WM_DELETE_WINDOW", shutdown)
+
+# ============================
+# PERMANENT PLAYBACK THREAD
+# ============================
+def playback(readerUI):
+    while not shutdown_event.is_set():
+
+        # Wait until Play is pressed
+        play_event.wait()
+
+        if shutdown_event.is_set():
+            break
+
+        try:
+            sample = audio_queue.get(timeout=0.5)
+
+        except queue.Empty:
+            continue
+
+        # End marker
+        if sample is None:
+            continue
+
+        if readerUI:
+            readerUI.highlight_playback(f"{sample.start}.0", f"{sample.end}.end")
+
+        sd.play(sample.audio, samplerate=24000)
+        sd.wait()
+
+    print("Playback thread exited")
+
+play_thread = threading.Thread(target=playback, args=(app,), daemon=True)
+play_thread.start()
+
 app.run()
