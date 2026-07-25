@@ -14,11 +14,15 @@ class ScriptLine:
 def parse_script(text, character_voices):
     script_lines = []
     #Get the lines
+
     lines = text.splitlines()
+    
     i = 0
 
     while i < len(lines):
         line = lines[i].strip()
+        line = preformat_text(line)
+
         if not line:
             i += 1
             continue
@@ -38,7 +42,7 @@ def parse_script(text, character_voices):
                 i += 1
             
             end = i + 1
-            speech = " ".join(dialogue)
+            speech = ". ".join(dialogue)
             for sentence in split_sentences(speech):
                 script_lines.append( ScriptLine(speech, sentence, character, start, end))
 
@@ -59,13 +63,17 @@ def parse_script(text, character_voices):
                 i += 1
 
             end = i + 1
-            speech = " ".join(narration)
+            speech = ". ".join(narration)
             for sentence in split_sentences(speech):
                 script_lines.append( ScriptLine(speech, sentence, "NARRATOR", start, end))
 
     # for line in script_lines:
     #     print(line,"\n")
     return script_lines
+
+
+def preformat_text(text):
+    return re.sub(r"\([^)]*\)", "", text)
 
 def split_sentences(text):
     return re.split(r"(?<=[.!?])\s+", text)

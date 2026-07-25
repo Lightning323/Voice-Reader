@@ -92,7 +92,6 @@ class ScreenplayPlayer:
         def update():
             self.script.tag_remove("gen", "1.0", "end")
             self.script.tag_add("gen", start, end)
-            self.script.see(start)
         self.ui(update)
 
     def log(self, text):
