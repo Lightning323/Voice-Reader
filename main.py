@@ -1,6 +1,7 @@
-import sounddevice as sd
+
 import queue
 import ui
+import numpy as np
 
 # ============================================================
 # KOKORO SETUP
@@ -59,6 +60,7 @@ class AudioSample:
 # AUDIO GENERATION
 # ============================
 
+
 def generate_audio(text, voice, speed, start, end):
     generator = pipeline(text, voice=voice, speed=speed)
     for _, _, audio in generator:
@@ -80,6 +82,7 @@ def queue_script_audio(readerUI, scriptLines):
             break
         speed = 1
         if readerUI:
+            readerUI.log(f'{line.character}: "{line.sentence}"')
             readerUI.highlight_gen(f"{line.start}.0", f"{line.end}.end")
             speed = readerUI.speed.get()
 
@@ -88,15 +91,13 @@ def queue_script_audio(readerUI, scriptLines):
             if line.character in CHARACTER_VOICES
             else NARRATOR_VOICE
         )
-
         generate_audio(line.sentence, voice, speed, line.start, line.end)
-
-
 
 
 # ============================
 # BUTTON ACTIONS
 # ============================
+
 
 def play(readerUI, text):
     global gen_thread
@@ -122,9 +123,7 @@ def play(readerUI, text):
     gen_thread = threading.Thread(
         target=queue_script_audio, args=(readerUI, script_lines), daemon=True
     )
-
     gen_thread.start()
-
     readerUI.log("Playback started")
 
 
@@ -133,9 +132,6 @@ def stop(readerUI):
 
     # Pause playback
     play_event.clear()
-
-    # Stop audio immediately
-    sd.stop()
 
     # Stop generating
     generation_stop.set()
@@ -152,36 +148,68 @@ def clear_audio_queue():
             break
 
 
-def shutdown():
-    print("Shutting down...")
-    shutdown_event.set()
-    # Wake playback thread
-    play_event.set()
-    sd.stop()
-
-
 # ============================================================
 # START APP
 # ============================================================
 
 app = ui.ScreenplayPlayer(playRunnable=play, stopRunnable=stop)
+
+
+def shutdown():
+    print("Shutting down...")
+    shutdown_event.set()
+    play_event.set()
+    app.root.destroy()
+
+
 app.root.protocol("WM_DELETE_WINDOW", shutdown)
+
 
 # ============================
 # PERMANENT PLAYBACK THREAD
 # ============================
+
+import pygame
+
+pygame.mixer.init(
+    frequency=24000,
+    size=-16,
+    channels=1
+)
+
+def play_audio(audio):
+    audio = (
+        audio.detach()
+        .cpu()
+        .numpy()
+        .flatten()
+    )
+
+    audio = np.clip(
+        audio * 32767,
+        -32768,
+        32767
+    ).astype(np.int16)
+
+    # duration in seconds
+    sample_rate = 24000
+    duration = len(audio) / sample_rate
+
+    sound = pygame.mixer.Sound(buffer=audio.tobytes())
+    sound.play()
+    # time.sleep(duration - 1)
+
 def playback(readerUI):
     while not shutdown_event.is_set():
-
         # Wait until Play is pressed
         play_event.wait()
+        print("Playback thread started")
 
         if shutdown_event.is_set():
             break
 
         try:
             sample = audio_queue.get(timeout=0.5)
-
         except queue.Empty:
             continue
 
@@ -191,11 +219,10 @@ def playback(readerUI):
 
         if readerUI:
             readerUI.highlight_playback(f"{sample.start}.0", f"{sample.end}.end")
-
-        sd.play(sample.audio, samplerate=24000)
-        sd.wait()
+        play_audio(sample.audio)
 
     print("Playback thread exited")
+
 
 play_thread = threading.Thread(target=playback, args=(app,), daemon=True)
 play_thread.start()
