@@ -1,7 +1,6 @@
-
 import queue
 import ui
-import numpy as np
+from playback import play_audio
 
 # ============================================================
 # KOKORO SETUP
@@ -15,16 +14,63 @@ print("Kokoro loaded.")
 
 # ============================================================
 # CHARACTER VOICES
+"""
+🇺🇸 American Female (af_*)
+| Voice |	Character |
+|--------|-------------|
+|af_heart | 	Warm, soft, emotional (default)
+|af_bella | 	Expressive, dynamic, one of the best-rated
+|af_nicole | 	Professional, clear
+|af_jessica | 	Friendly, conversational
+|af_sarah | 	Neutral, articulate
+|af_sky | 	Bright, energetic
+|af_nova | 	Slightly dreamy, gentle
+|af_kore | 	Soft, calm
+|af_river | 	Relaxed, flowing
+|af_alloy | 	Crisp, modern
+|af_aoede | 	Musical, lyrical
+
+🇺🇸 American Male (am_*)
+|Voice | 	Character|
+|--------|-------------|
+|am_adam | 	Deep narrator|
+|am_michael | 	Natural, casual|
+|am_eric | 	Clear, balanced|
+|am_liam | 	Youthful|
+|am_echo | 	Smooth|
+|am_onyx | 	Deeper tone|
+|am_fenrir | 	Strong, dramatic|
+|am_puck | 	Lighter, energetic|
+
+🇬🇧 British Female (bf_*)
+bf_alice
+bf_emma
+bf_isabella
+bf_lily
+
+🇬🇧 British Male (bm_*)
+bm_daniel
+bm_fable
+bm_george
+bm_lewis
+"""
 # ============================================================
 
+
+class Character:
+    def __init__(self, voice, speed_multiplier):
+        self.voice = voice
+        self.speed_multiplier = speed_multiplier
+
+
 CHARACTER_VOICES = {
-    "RAMIREZ": "af_bella",
-    "PATEL": "am_eric",
-    "CARTER": "am_michael",
-    "ELANA": "af_nicole",
+    "RAMIREZ": Character("af_bella", 1.4),
+    "PATEL": Character("am_eric", 1),
+    "CARTER": Character("am_michael", 1),
+    "ELANA": Character("af_nicole", 3),
 }
 
-NARRATOR_VOICE = "am_adam"
+NARRATOR_VOICE = Character("am_adam", 1)
 
 
 # ============================================================
@@ -33,7 +79,6 @@ NARRATOR_VOICE = "am_adam"
 import queue
 import threading
 import scriptParsing
-import time
 
 # ============================
 # AUDIO STATE
@@ -74,6 +119,8 @@ def generate_audio(text, voice, speed, line):
                     return
     audio_queue.put(None)
 
+def clamp(value, min_value, max_value):
+    return max(min(value, max_value), min_value)
 
 def queue_script_audio(readerUI, scriptLines):
     for line in scriptLines:
@@ -89,7 +136,8 @@ def queue_script_audio(readerUI, scriptLines):
             if line.character in CHARACTER_VOICES
             else NARRATOR_VOICE
         )
-        generate_audio(line.sentence, voice, speed, line)
+
+        generate_audio(line.sentence, voice.voice, clamp(speed * voice.speed_multiplier, 0.05, 20), line)
 
 
 # ============================
@@ -164,38 +212,9 @@ def shutdown():
 
 app.root.protocol("WM_DELETE_WINDOW", shutdown)
 
-
 # ============================
 # PERMANENT PLAYBACK THREAD
 # ============================
-
-import pygame
-
-pygame.mixer.init(
-    frequency=24000,
-    size=-16,
-    channels=1
-)
-
-def play_audio(audio):
-    audio = (
-        audio.detach()
-        .cpu()
-        .numpy()
-        .flatten()
-    )
-
-    audio = np.clip(
-        audio * 32767,
-        -32768,
-        32767
-    ).astype(np.int16)
-
-    sound = pygame.mixer.Sound(buffer=audio.tobytes())
-    delay = max(0, sound.get_length())
-    sound.play()
-    # print(delay)
-    time.sleep(delay)
 
 def playback(readerUI):
     while not shutdown_event.is_set():
@@ -216,9 +235,11 @@ def playback(readerUI):
             continue
 
         if readerUI:
-            readerUI.highlight_playback(f"{sample.line.start}.0", f"{sample.line.end}.end")
+            readerUI.highlight_playback(
+                f"{sample.line.start}.0", f"{sample.line.end}.end"
+            )
             readerUI.log(f'{sample.line.character}: "{sample.line.sentence}"')
-            readerUI.set_status(f'{sample.line.character}')
+            readerUI.set_status(f"{sample.line.character}")
         play_audio(sample.audio)
 
     print("Playback thread exited")
