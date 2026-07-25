@@ -101,6 +101,7 @@ def queue_script_audio(readerUI, scriptLines):
 
 def play(readerUI, text):
     global gen_thread
+    readerUI.set_status("Playing...")
 
     # Resume playback
     play_event.set()
@@ -129,6 +130,7 @@ def play(readerUI, text):
 
 def stop(readerUI):
     global gen_thread
+    readerUI.set_status("Stopped")
 
     # Pause playback
     play_event.clear()
@@ -201,7 +203,7 @@ def playback(readerUI):
     while not shutdown_event.is_set():
         # Wait until Play is pressed
         play_event.wait()
-        print("Playback thread started")
+        # print("Playback thread started")
 
         if shutdown_event.is_set():
             break

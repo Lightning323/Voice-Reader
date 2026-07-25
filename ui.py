@@ -24,9 +24,9 @@ class ScreenplayPlayer:
         toolbar.pack(fill="x", padx=10, pady=10)
 
         ttk.Button(toolbar, text="▶ Play", command=self.play).pack(side="left", padx=5)
-        ttk.Button(toolbar, text="⏸ Pause", command=self.pause).pack(
-            side="left", padx=5
-        )
+        # ttk.Button(toolbar, text="⏸ Pause", command=self.pause).pack(
+        #     side="left", padx=5
+        # )
         ttk.Button(toolbar, text="■ Stop", command=self.stop).pack(side="left", padx=5)
 
         ttk.Label(toolbar, text="Speed:").pack(side="left", padx=(30, 5))
@@ -117,9 +117,9 @@ class ScreenplayPlayer:
         text = self.script.get("1.0", "end")
         self.playRunnable(self, text)
 
-    def pause(self):
-        global pause_flag
-        pause_flag = not pause_flag
+    # def pause(self):
+    #     global pause_flag
+    #     pause_flag = not pause_flag
 
     def stop(self):
         global stop_flag
