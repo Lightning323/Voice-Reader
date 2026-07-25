@@ -58,15 +58,16 @@ bm_lewis
 
 
 class Character:
-    def __init__(self, voice, speed_multiplier):
+    def __init__(self, voice, speed_multiplier, volume_multiplier=1):
         self.voice = voice
         self.speed_multiplier = speed_multiplier
+        self.volume_multiplier = volume_multiplier
 
 
 CHARACTER_VOICES = {
     "RAMIREZ": Character("af_aoede", 1),
     "PATEL": Character("am_eric", 1),
-    "CARTER": Character("am_michael", 1),
+    "CARTER": Character("am_michael", 1, 10),
     "ELANA": Character("af_nicole", 1),
 }
 
@@ -240,7 +241,14 @@ def playback(readerUI):
             )
             readerUI.log(f'{sample.line.character}: "{sample.line.sentence}"')
             readerUI.set_status(f"{sample.line.character}")
-        play_audio(sample.audio)
+
+
+        characterVoice = (
+            CHARACTER_VOICES[sample.line.character]
+            if sample.line.character in CHARACTER_VOICES
+            else NARRATOR_VOICE
+        )
+        play_audio(sample.audio, characterVoice.volume_multiplier)
 
     print("Playback thread exited")
 
