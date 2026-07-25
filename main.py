@@ -68,7 +68,8 @@ CHARACTER_VOICES = {
     "RAMIREZ": Character("af_aoede", 1),
     "PATEL": Character("am_eric", 1),
     "CARTER": Character("am_michael", 1, 1),
-    "ELANA": Character("af_nicole", 1),
+    "ELANA": Character("af_sarah", 1),
+    "MIGUEL": Character("bm_daniel", 1),
 }
 
 NARRATOR_VOICE = Character("am_adam", 1)
