@@ -6,15 +6,30 @@ from characters import load_characters, save_characters, Character
 class CharacterEditor(ttk.Frame):
     def __init__(self, parent):
         super().__init__(parent)
-        self.columnconfigure(0, weight=1)
-        self.columnconfigure(1, weight=0)
-        self.columnconfigure(2, weight=1)
         self.characters = load_characters()
         self.selected_character = None
 
-        # Character list
-        self.character_list = tk.Listbox(self)
-        self.character_list.grid(row=0, column=0, rowspan=5, padx=3, pady=3)
+        # Layout
+        self.columnconfigure(0, weight=1)
+
+        # ==================================================
+        # Character List
+        # ==================================================
+
+        ttk.Label(
+            self,
+            text="Characters",
+            font=("", 10, "bold")
+        ).grid(row=0, column=0, sticky="w", padx=5, pady=(5, 2))
+
+        self.character_list = tk.Listbox(self, height=6)
+        self.character_list.grid(
+            row=1,
+            column=0,
+            sticky="nsew",
+            padx=5,
+            pady=(0, 5)
+        )
 
         for name in self.characters:
             self.character_list.insert(tk.END, name)
@@ -24,53 +39,131 @@ class CharacterEditor(ttk.Frame):
             self.load_character
         )
 
-        # Fields
-        ttk.Label(self, text="Name").grid(row=0, column=1)
-        self.name_entry = ttk.Entry(self)
-        self.name_entry.grid(row=0, column=2, padx=3, pady=3)
-
-        ttk.Label(self, text="Voice").grid(row=1, column=1)
-        self.voice_entry = ttk.Entry(self)
-        self.voice_entry.grid(row=1, column=2, padx=3, pady=3)
-
-        ttk.Label(self, text="Speed").grid(row=2, column=1)
-        self.speed_entry = ttk.Entry(self)
-        self.speed_entry.grid(row=2, column=2, padx=3, pady=3)
-
-        ttk.Label(self, text="Volume").grid(row=3, column=1)
-        self.volume_entry = ttk.Entry(self)
-        self.volume_entry.grid(row=3, column=2, padx=3, pady=3)
-
-        #save events
-        self.name_entry = ttk.Entry(self)
-        self.name_entry.grid(row=0, column=2)
-
-        self.voice_entry = ttk.Entry(self)
-        self.voice_entry.grid(row=1, column=2)
-
-        self.speed_entry = ttk.Entry(self)
-        self.speed_entry.grid(row=2, column=2)
-
-        self.volume_entry = ttk.Entry(self)
-        self.volume_entry.grid(row=3, column=2)
-
-        self.name_entry.bind("<FocusOut>", self.auto_save)
-        self.voice_entry.bind("<FocusOut>", self.auto_save)
-        self.speed_entry.bind("<FocusOut>", self.auto_save)
-        self.volume_entry.bind("<FocusOut>", self.auto_save)
-
+        # ==================================================
         # Buttons
-        ttk.Button(
-            self,
-            text="Add Character",
-            command=self.add_character
-        ).grid(row=4, column=1, padx=3, pady=3)
+        # ==================================================
+
+        button_frame = ttk.Frame(self)
+        button_frame.grid(
+            row=2,
+            column=0,
+            sticky="ew",
+            padx=5,
+            pady=(0, 8)
+        )
+
+        button_frame.columnconfigure((0, 1), weight=1)
 
         ttk.Button(
-            self,
-            text="Delete Character",
+            button_frame,
+            text="Add",
+            command=self.add_character
+        ).grid(row=0, column=0, sticky="ew", padx=(0, 2))
+
+        ttk.Button(
+            button_frame,
+            text="Delete",
             command=self.delete_character
-        ).grid(row=4, column=2, padx=3, pady=3)
+        ).grid(row=0, column=1, sticky="ew", padx=(2, 0))
+
+        # ==================================================
+        # Properties
+        # ==================================================
+
+        properties = ttk.LabelFrame(self, text="Properties")
+        properties.grid(
+            row=3,
+            column=0,
+            sticky="nsew",
+            padx=5,
+            pady=(0, 5)
+        )
+
+        properties.columnconfigure(1, weight=1)
+
+        # Name
+        ttk.Label(properties, text="Name").grid(
+            row=0,
+            column=0,
+            sticky="w",
+            padx=5,
+            pady=3
+        )
+
+        self.name_entry = ttk.Entry(properties)
+        self.name_entry.grid(
+            row=0,
+            column=1,
+            sticky="ew",
+            padx=5,
+            pady=3
+        )
+
+        # Voice
+        ttk.Label(properties, text="Voice").grid(
+            row=1,
+            column=0,
+            sticky="w",
+            padx=5,
+            pady=3
+        )
+
+        self.voice_entry = ttk.Entry(properties)
+        self.voice_entry.grid(
+            row=1,
+            column=1,
+            sticky="ew",
+            padx=5,
+            pady=3
+        )
+
+        # Speed
+        ttk.Label(properties, text="Speed").grid(
+            row=2,
+            column=0,
+            sticky="w",
+            padx=5,
+            pady=3
+        )
+
+        self.speed_entry = ttk.Entry(properties)
+        self.speed_entry.grid(
+            row=2,
+            column=1,
+            sticky="ew",
+            padx=5,
+            pady=3
+        )
+
+        # Volume
+        ttk.Label(properties, text="Volume").grid(
+            row=3,
+            column=0,
+            sticky="w",
+            padx=5,
+            pady=3
+        )
+
+        self.volume_entry = ttk.Entry(properties)
+        self.volume_entry.grid(
+            row=3,
+            column=1,
+            sticky="ew",
+            padx=5,
+            pady=3
+        )
+
+        # ==================================================
+        # Auto-save
+        # ==================================================
+
+        for widget in (
+            self.name_entry,
+            self.voice_entry,
+            self.speed_entry,
+            self.volume_entry,
+        ):
+            widget.bind("<FocusOut>", self.auto_save)
 
 
 
