@@ -38,8 +38,18 @@ class CharacterEditor(ttk.Frame):
         # Prevent the frame from shrinking below 200px
         list_frame.grid_propagate(False)
 
-        self.character_list = tk.Listbox(list_frame)
+        self.character_list = tk.Listbox(
+            list_frame,
+            bg="#2b2b2b",
+            fg="#ffffff",
+            selectbackground="#0d6efd",
+            selectforeground="#ffffff",
+            highlightthickness=0,
+            borderwidth=0,
+            activestyle="none",
+        )
         self.character_list.pack(fill="both", expand=True)
+
 
         for name in self.characters:
             self.character_list.insert(tk.END, name)

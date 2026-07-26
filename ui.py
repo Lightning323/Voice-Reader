@@ -1,5 +1,6 @@
 import tkinter as tk
-from tkinter import ttk
+import ttkbootstrap as ttk
+import tkinter as tk
 import threading
 import re
 
@@ -15,9 +16,11 @@ class ScreenplayPlayer:
         self.playRunnable = playRunnable
         self.stopRunnable = stopRunnable
 
-        self.root = tk.Tk()
+        # self.root = tk.Tk()
+        self.root = ttk.Window(themename="darkly")
         self.root.title("Screenplay Player")
         self.root.geometry("1200x750")
+        
 
         # -----------------------------
         # Toolbar
@@ -56,7 +59,7 @@ class ScreenplayPlayer:
         # Main horizontal splitter
         # ==========================================
 
-        self.main_paned = ttk.PanedWindow(body, orient=tk.HORIZONTAL)
+        self.main_paned = ttk.Panedwindow(body, orient=tk.HORIZONTAL)
         self.main_paned.pack(fill="both", expand=True)
 
         screenplay_frame = ttk.Frame(self.main_paned)
@@ -71,22 +74,25 @@ class ScreenplayPlayer:
 
         self.script = tk.Text(
             screenplay_frame,
+            bg="#111111",
+            fg="#d4d4d4",
+            insertbackground="white",
+            selectbackground="#264f78",
             wrap="word",
-            font=("Consolas", 12),
+            font=("Consolas", 14),
         )
 
         self.script.pack(fill="both", expand=True)
 
-        self.script.tag_configure("gen", background="#dddddd", foreground="black")
-        self.script.tag_configure("current", background="#ffd54f", foreground="black")
-        self.script.tag_configure("character", foreground="#1565c0")
-        self.script.tag_configure("narration", foreground="#555555")
-
+        self.script.tag_configure("gen", background="#404040", foreground="white")
+        self.script.tag_configure("current", background="#b58900", foreground="black")
+        self.script.tag_configure("character", foreground="#4fc3f7")
+        self.script.tag_configure("narration", foreground="#bbbbbb")
         # ==========================================
         # Right vertical splitter
         # ==========================================
 
-        self.right_paned = ttk.PanedWindow(right_panel, orient=tk.VERTICAL)
+        self.right_paned = ttk.Panedwindow(right_panel, orient=tk.VERTICAL)
         self.right_paned.pack(fill="both", expand=True)
 
         # -----------------------------
@@ -97,9 +103,11 @@ class ScreenplayPlayer:
 
         self.output = tk.Text(
             output_frame,
+            bg="#111111",
+            fg="#d4d4d4",
+            insertbackground="white",
+            selectbackground="#264f78",
             state="disabled",
-            bg="#222",
-            fg="white",
             font=("Consolas", 11),
         )
 
