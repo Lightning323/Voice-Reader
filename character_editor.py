@@ -100,6 +100,10 @@ class CharacterEditor(ttk.Frame):
         )
 
         properties.columnconfigure(1, weight=1)
+        properties.rowconfigure(0, weight=1)
+        properties.rowconfigure(1, weight=1)
+        properties.rowconfigure(2, weight=1)
+        properties.rowconfigure(3, weight=1)
 
         # Name
         ttk.Label(properties, text="Name").grid(

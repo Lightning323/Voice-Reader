@@ -16,7 +16,7 @@
     },
     "CARTERASDF": {
         "voice": "am_michaelff",
-        "speed_multiplier": -1000000000000.2,
+        "speed_multiplier": -10000000000000.2,
         "volume_multiplier": 100.5
     }
 }
