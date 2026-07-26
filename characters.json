@@ -5,18 +5,18 @@
         "volume_multiplier": 0.5
     },
     "PATEL": {
+        "voice": "am_michael",
+        "speed_multiplier": 1.0,
+        "volume_multiplier": 0.5
+    },
+    "NARRATOR": {
         "voice": "am_adam",
         "speed_multiplier": 1.0,
         "volume_multiplier": 0.5
     },
-    "JANGO": {
-        "voice": "af_heart",
+    "CARTER": {
+        "voice": "am_adam",
         "speed_multiplier": 1.0,
-        "volume_multiplier": 0.5
-    },
-    "JONNY": {
-        "voice": "af_heart",
-        "speed_multiplier": 0.1,
         "volume_multiplier": 0.5
     }
 }

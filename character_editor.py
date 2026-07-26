@@ -164,6 +164,7 @@ class CharacterEditor(ttk.Frame):
             self.volume_entry,
         ):
             widget.bind("<FocusOut>", self.auto_save)
+            widget.bind("<Return>", self.auto_save)
 
 
 

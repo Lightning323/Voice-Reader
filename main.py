@@ -30,7 +30,8 @@ generated_characters = 0
 
 audio_queue = queue.Queue()
 character_voices = {}
-narrator_voice = characters.Character("af_heart", 1.0, 0.5)
+#The fallback voice if no character voice is found
+narrator_voice = characters.Character("am_adam", 1.0, 0.5)
 PLAY_AFTER_N_CHARACTERS = 750
 
 gen_thread = None
