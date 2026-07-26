@@ -2,8 +2,6 @@
 import pygame
 import numpy as np
 import time
-# from pydub import AudioSegment
-# from pydub.silence import detect_nonsilent
 
 pygame.mixer.init(
     frequency=24000,
@@ -37,4 +35,14 @@ def play_audio(audio_chunks, volume_multiplier, end_offset):
             if i < len(audio_chunks) - 1:
                 time.sleep(duration)
             else: # ... adjust time offset only at final wait.
+                # duration = get_non_silent_duration(audio)
                 time.sleep(max(0.01, duration + end_offset))
+
+def get_non_silent_duration(audio, sample_rate=24000):
+    threshold = 500
+
+    for i in range(len(audio) - 1, -1, -1):
+        if abs(audio[i]) > threshold:
+            return (i + 1) / sample_rate
+
+    return 0
