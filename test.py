@@ -10,7 +10,10 @@ CARTER
 We dont have time for this! . . . 
 
 ELANA
-The information has come from 2,160,000 light years away. The signal was picked up as a distortion of gravitational waves. Numerous outposts informed us of strange anomalies in gravitational fields. Most of the information was gathered from reconnaissance stations. After sufficient data and analysis can confirm with high certainty that there is intelligent life in sector SDSS J1426.
+The information has come from 2,160,000 light years away. 
+The signal was picked up as a distortion of gravitational waves. 
+Numerous outposts informed us of strange anomalies in gravitational fields. 
+Most of the information was gathered from reconnaissance stations. After sufficient data and analysis can confirm with high certainty that there is intelligent life in sector SDSS J1426.
 
 . . .
 

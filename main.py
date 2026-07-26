@@ -136,6 +136,7 @@ def queue_script_audio(readerUI, scriptLines):
 
         #Only start playback after 3 lines
         generated_characters += len(line.text)
+        print("Generated characters:", generated_characters)
         if(generated_characters > PLAY_AFTER_N_CHARACTERS): 
             play_event.set()
         
