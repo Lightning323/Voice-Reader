@@ -93,7 +93,7 @@ generation_stop = threading.Event()  # Stop current generation
 # QUEUE_SIZE = 4000
 audio_queue = queue.Queue()
 
-PLAY_AFTER_N_LINES = 6
+PLAY_AFTER_N_CHARACTERS = 100
 
 gen_thread = None
 
@@ -128,14 +128,16 @@ def clamp(value, min_value, max_value):
     return max(min(value, max_value), min_value)
 
 def queue_script_audio(readerUI, scriptLines):
-    generated_lines = 0
+    generated_characters = 0
+
     for line in scriptLines:
         if generation_stop.is_set():
             break
 
         #Only start playback after 3 lines
-        generated_lines += 1
-        if(generated_lines > PLAY_AFTER_N_LINES): 
+        generated_characters += len(line.text)
+        print(generated_characters)
+        if(generated_characters > PLAY_AFTER_N_CHARACTERS): 
             play_event.set()
         
         speed = 1
@@ -149,10 +151,10 @@ def queue_script_audio(readerUI, scriptLines):
             else NARRATOR_VOICE
         )
 
-        #Calculate how fast to speak a sentence
+        #Calculate how fast to speak a line
         speed = clamp(speed * character.speed_multiplier, 0.05, 20)
 
-        generate_audio(line.sentence, character.voice, line,
+        generate_audio(line.text, character.voice, line,
                         speed=speed, volume_multiplier=character.volume_multiplier)
 
     #Or playback if there are no lines if less than 3 in the script
@@ -254,7 +256,7 @@ def playback(readerUI):
             readerUI.highlight_playback(
                 f"{sample.line.start}.0", f"{sample.line.end}.end"
             )
-            readerUI.log(f'{sample.line.character}: "{sample.line.sentence}"')
+            readerUI.log(f'{sample.line.character}: "{sample.line.text}"')
             readerUI.set_status(f"{sample.line.character}")
         play_audio(sample.audio, volume_multiplier=sample.volume_multiplier, end_offset=sample.line.end_offset)
 

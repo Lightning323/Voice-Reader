@@ -1,16 +1,15 @@
 import re
 
 class ScriptLine:
-    def __init__(self, text, sentence, character, end_offset, start, end):
+    def __init__(self, text, character, end_offset, start, end):
         self.text = text
         self.character = character
         self.end_offset = end_offset
         self.start = start
         self.end = end
-        self.sentence = sentence
 
     def __str__(self):
-        return f"{self.character}: \"{self.sentence}\" (offset={self.end_offset}) ({self.start}-{self.end})"
+        return f"{self.character}: \"{self.text}\" (offset={self.end_offset}) ({self.start}-{self.end})"
 
 def add_script_lines(script_lines, dialogue, character, start, end):
     speech = " ".join(dialogue).strip()
@@ -22,15 +21,13 @@ def add_script_lines(script_lines, dialogue, character, start, end):
         end_offset = -2
     elif(speech.endswith(". . .")):
         end_offset = 2
-    
+
+    speech = speech.replace(". . .", "")
     speech = remove_parenthesis(speech)
 
-    # if speech == "":
-    #     return
-    for sentence in split_sentences(speech):
-        script_lines.append(
-            ScriptLine(speech, sentence, character, end_offset, start, end)
-        )
+    script_lines.append(
+        ScriptLine(speech, character, end_offset, start, end)
+    )
 
 def parse_script(text, character_voices):
     script_lines = []
@@ -86,7 +83,3 @@ def parse_script(text, character_voices):
 
 def remove_parenthesis(text):
     return re.sub(r"\([^)]*\)", "", text)
-
-def split_sentences(text):
-    parts = re.split(r"(?<=[.!?])\s+", text)
-    return [s for s in parts if re.search(r"\w", s)]
