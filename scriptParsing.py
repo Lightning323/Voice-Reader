@@ -43,19 +43,19 @@ def add_script_line(script_lines, speech, character, start, end):
         end_offset = -1.5 / speed_multiplier
 
     #More dots = longer pauses
+    speech = speech.replace("…", "...").replace(". . .", "...")
     dot_strip = speech.replace(" ", "")
-    if dot_strip.endswith("......") or speech.endswith("……"):
+    if dot_strip.endswith("......"):
         end_offset = 4 / speed_multiplier
-    elif dot_strip.endswith(".....") or speech.endswith("….."):
+    elif dot_strip.endswith("....."):
         end_offset = 4 / speed_multiplier
-    elif dot_strip.endswith("....") or speech.endswith("…."):
+    elif dot_strip.endswith("...."):
         end_offset = 3 / speed_multiplier
-    elif dot_strip.endswith("...") or speech.endswith("…"):
+    elif dot_strip.endswith("..."):
         end_offset = 2 / speed_multiplier
     elif dot_strip.endswith(".."):
         end_offset = 1 / speed_multiplier
 
-    speech = speech.replace(". . .", "").replace("…", "...")
     speech = remove_parenthesis(speech)
 
     script_lines.append(ScriptLine(speech, character, speed_multiplier, end_offset, start, end))
