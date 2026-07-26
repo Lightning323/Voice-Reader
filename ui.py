@@ -30,12 +30,13 @@ class ScreenplayPlayer:
         ttk.Button(toolbar, text="■ Stop", command=self.stop).pack(side="left", padx=5)
 
         ttk.Label(toolbar, text="Speed:").pack(side="left", padx=(30, 5))
-
         self.speed = tk.DoubleVar(value=0.9)
-
-        ttk.Scale(toolbar, from_=0.5, to=1.5, variable=self.speed, length=150).pack(
+        ttk.Scale(toolbar, from_=0.5, to=2.5, variable=self.speed, length=250).pack(
             side="left", padx=5
         )
+
+
+        ttk.Button(toolbar, text="Clear", command=self.clear_script).pack(side="left", padx=5)
 
         self.status = ttk.Label(toolbar, text="Idle")
 
@@ -124,6 +125,9 @@ class ScreenplayPlayer:
         global stop_flag
         stop_flag = True
         self.stopRunnable(self)
+
+    def clear_script(self):
+        self.script.delete("1.0", "end")
 
     # ========================================================
     # PARSER
