@@ -56,14 +56,14 @@ class ScreenplayPlayer:
         # Main horizontal splitter
         # ==========================================
 
-        main_paned = ttk.PanedWindow(body, orient=tk.HORIZONTAL)
-        main_paned.pack(fill="both", expand=True)
+        self.main_paned = ttk.PanedWindow(body, orient=tk.HORIZONTAL)
+        self.main_paned.pack(fill="both", expand=True)
 
-        screenplay_frame = ttk.Frame(main_paned)
-        right_panel = ttk.Frame(main_paned)
+        screenplay_frame = ttk.Frame(self.main_paned)
+        right_panel = ttk.Frame(self.main_paned)
 
-        main_paned.add(screenplay_frame, weight=3)
-        main_paned.add(right_panel, weight=1)
+        self.main_paned.add(screenplay_frame, weight=3)
+        self.main_paned.add(right_panel, weight=1)
 
         # ==========================================
         # Screenplay
@@ -72,12 +72,11 @@ class ScreenplayPlayer:
         self.script = tk.Text(
             screenplay_frame,
             wrap="word",
-            font=("Consolas", 14)
+            font=("Consolas", 12),
         )
 
         self.script.pack(fill="both", expand=True)
 
-        # Highlight styles
         self.script.tag_configure("gen", background="#dddddd", foreground="black")
         self.script.tag_configure("current", background="#ffd54f", foreground="black")
         self.script.tag_configure("character", foreground="#1565c0")
@@ -87,14 +86,14 @@ class ScreenplayPlayer:
         # Right vertical splitter
         # ==========================================
 
-        right_paned = ttk.PanedWindow(right_panel, orient=tk.VERTICAL)
-        right_paned.pack(fill="both", expand=True)
+        self.right_paned = ttk.PanedWindow(right_panel, orient=tk.VERTICAL)
+        self.right_paned.pack(fill="both", expand=True)
 
         # -----------------------------
         # Output log
         # -----------------------------
 
-        output_frame = ttk.Frame(right_paned)
+        output_frame = ttk.Frame(self.right_paned)
 
         self.output = tk.Text(
             output_frame,
@@ -110,14 +109,30 @@ class ScreenplayPlayer:
         # Character editor
         # -----------------------------
 
-        character_frame = ttk.Frame(right_paned)
+        character_frame = ttk.Frame(self.right_paned)
 
         self.character_editor = CharacterEditor(character_frame)
         self.character_editor.pack(fill="both", expand=True)
 
-        # Add panes
-        right_paned.add(output_frame, weight=1)
-        right_paned.add(character_frame, weight=1)
+        self.right_paned.add(output_frame, weight=1)
+        self.right_paned.add(character_frame, weight=1)
+
+        # ==========================================
+        # Initial splitter positions
+        # ==========================================
+
+        def init_layout():
+            self.root.update_idletasks()
+
+            # Right panel starts at ~340px wide
+            window_width = self.root.winfo_width()
+            self.main_paned.sashpos(0, window_width - 340)
+
+            # Character editor starts at ~300px tall
+            right_height = self.right_paned.winfo_height()
+            self.right_paned.sashpos(0, max(150, right_height - 300))
+
+        self.root.after(10, init_layout)
 
     # ========================================================
     # UI HELPERS
