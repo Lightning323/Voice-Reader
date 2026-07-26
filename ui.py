@@ -3,8 +3,11 @@ from tkinter import ttk
 import threading
 import re
 
+from character_editor import CharacterEditor
+
 stop_flag = False
 pause_flag = False
+
 
 class ScreenplayPlayer:
 
@@ -49,11 +52,24 @@ class ScreenplayPlayer:
         body = ttk.Frame(self.root)
         body.pack(fill="both", expand=True, padx=10, pady=10)
 
+        # Columns
+        body.columnconfigure(0, weight=3)  # screenplay
+        body.columnconfigure(1, weight=1)  # right panel
+        body.rowconfigure(0, weight=1)
+
         # screenplay
+        self.script = tk.Text(
+            body,
+            wrap="word",
+            font=("Consolas", 14)
+        )
 
-        self.script = tk.Text(body, wrap="word", font=("Consolas", 14))
-
-        self.script.pack(side="left", fill="both", expand=True)
+        self.script.grid(
+            row=0,
+            column=0,
+            sticky="nsew",
+            padx=(0, 5)
+        )
 
         # highlight styles
         self.script.tag_configure("gen", background="#dddddd", foreground="black")
@@ -61,18 +77,50 @@ class ScreenplayPlayer:
         self.script.tag_configure("character", foreground="#1565c0")
         self.script.tag_configure("narration", foreground="#555555")
 
-        # output
+       
+        # -----------------------------
+        # Right side panel
+        # -----------------------------
 
+        right_panel = ttk.Frame(body)
+
+        right_panel.grid(
+            row=0,
+            column=1,
+            sticky="nsew"
+        )
+
+        right_panel.columnconfigure(0, weight=1)
+        right_panel.rowconfigure(0, weight=1)  # output
+        right_panel.rowconfigure(1, weight=1)  # character editor
+
+
+        # Output
         self.output = tk.Text(
-            body,
-            width=35,
+            right_panel,
             state="disabled",
             bg="#222",
             fg="white",
-            font=("Consolas", 11),
+            font=("Consolas", 11)
         )
 
-        self.output.pack(side="right", fill="y")
+        self.output.grid(
+            row=0,
+            column=0,
+            sticky="nsew",
+            pady=(0, 5)
+        )
+
+
+        # Character editor
+        self.character_editor = CharacterEditor(right_panel)
+
+        self.character_editor.grid(
+            row=1,
+            column=0,
+            sticky="nsew",
+            pady=(5, 0)
+        )
 
     # ========================================================
     # UI HELPERS
@@ -87,12 +135,14 @@ class ScreenplayPlayer:
             self.script.tag_remove("current", "1.0", "end")
             self.script.tag_add("current", start, end)
             self.script.see(start)
+
         self.ui(update)
 
     def highlight_gen(self, start, end):
         def update():
             self.script.tag_remove("gen", "1.0", "end")
             self.script.tag_add("gen", start, end)
+
         self.ui(update)
 
     def log(self, text):
@@ -132,8 +182,6 @@ class ScreenplayPlayer:
     # ========================================================
     # PARSER
     # ========================================================
-
-
 
     def run(self):
         self.root.mainloop()

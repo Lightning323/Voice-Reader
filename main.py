@@ -1,7 +1,7 @@
 import queue
 import ui
 from playback import play_audio
-
+import character_editor
 # ============================================================
 # KOKORO SETUP
 # ============================================================
@@ -10,70 +10,6 @@ from kokoro import KPipeline
 
 pipeline = KPipeline(lang_code="a")
 print("Kokoro loaded.")
-
-
-# ============================================================
-# CHARACTER VOICES
-"""
-🇺🇸 American Female (af_*)
-| Voice |	Character |
-|--------|-------------|
-|af_heart | 	Warm, soft, emotional (default)
-|af_bella | 	Expressive, dynamic, one of the best-rated
-|af_nicole | 	Professional, clear
-|af_jessica | 	Friendly, conversational
-|af_sarah | 	Neutral, articulate
-|af_sky | 	Bright, energetic
-|af_nova | 	Slightly dreamy, gentle
-|af_kore | 	Soft, calm
-|af_river | 	Relaxed, flowing
-|af_alloy | 	Crisp, modern
-|af_aoede | 	Musical, lyrical
-
-🇺🇸 American Male (am_*)
-|Voice | 	Character|
-|--------|-------------|
-|am_adam | 	Deep narrator|
-|am_michael | 	Natural, casual|
-|am_eric | 	Clear, balanced|
-|am_liam | 	Youthful|
-|am_echo | 	Smooth|
-|am_onyx | 	Deeper tone|
-|am_fenrir | 	Strong, dramatic|
-|am_puck | 	Lighter, energetic|
-
-🇬🇧 British Female (bf_*)
-bf_alice
-bf_emma
-bf_isabella
-bf_lily
-
-🇬🇧 British Male (bm_*)
-bm_daniel
-bm_fable
-bm_george
-bm_lewis
-"""
-# ============================================================
-
-
-class Character:
-    def __init__(self, voice, speed_multiplier, volume_multiplier=0.5):
-        self.voice = voice
-        self.speed_multiplier = speed_multiplier
-        self.volume_multiplier = volume_multiplier
-
-
-CHARACTER_VOICES = {
-    "RAMIREZ": Character("af_aoede", 1),
-    "PATEL": Character("am_eric", 1),
-    "CARTER": Character("am_michael", 1.25, 1),
-    "ELANA": Character("af_sarah", 1),
-    "MIGUEL": Character("bm_daniel", 1),
-    "ARRIS": Character("am_liam", 1),
-}
-
-NARRATOR_VOICE = Character("am_adam", 1)
 
 
 # ============================================================
