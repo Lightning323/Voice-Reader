@@ -22,6 +22,7 @@ class ScriptLine:
 def add_script_line(script_lines, speech, character, start, end):
     end_offset = 0
     speed_multiplier = 1
+    speech = speech.strip()
 
     #Speed adjustment
     if in_parentheses(speech.lower(), ["_f_", "rapid","fast","frantic","quick","quick"]):

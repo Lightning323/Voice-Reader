@@ -13,7 +13,7 @@ Adding an indicator in parentheses can change the reading speed of that line.
 * To make the line slower, ise `(_s_)` `(slow)`, `(methodical)`, or `(thorough)`.
 
 * You can increase or decrease even further by adding "very" `(very fast)`, `(very slow)`, etc, or `(_ff_)`, `(_ss_)`.
-    * `(_fff_)`, `(_sss_)` for increased speed, etc.
+    * `(_fff_)`, `(_sss_)` for further increased speed, etc.
 
 ### Interruptions
 Put a hyphen (`--` or `-`) at the end of a line to interrupt the line.
