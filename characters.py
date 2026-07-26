@@ -1,5 +1,5 @@
 import json
-
+import os
 
 class Character:
     def __init__(self, voice, speed_multiplier, volume_multiplier=0.5):
@@ -9,7 +9,7 @@ class Character:
 
 
 def load_characters(filename="characters.json"):
-    try:
+    if os.path.exists(filename):
         with open(filename, "r") as file:
             data = json.load(file)
 
@@ -21,8 +21,10 @@ def load_characters(filename="characters.json"):
             )
             for name, info in data.items()
         }
-    except FileNotFoundError:
-        return {}
+    else:
+        characters = {"NARRATOR":Character("am_adam", 1.0, 0.5)}
+        save_characters(characters=characters)
+        return characters
 
 def save_characters(characters, filename="characters.json"):
     data = {}
