@@ -92,10 +92,9 @@ shutdown_event = threading.Event()  # App closing
 generation_stop = threading.Event()  # Stop current generation
 generated_characters = 0
 
-# QUEUE_SIZE = 4000
 audio_queue = queue.Queue()
 
-PLAY_AFTER_N_CHARACTERS = 1000
+PLAY_AFTER_N_CHARACTERS = 750
 
 gen_thread = None
 
