@@ -1,25 +1,35 @@
 import re
 
 class ScriptLine:
-    def __init__(self, text, sentence, character, start, end):
+    def __init__(self, text, sentence, character, end_offset, start, end):
         self.text = text
         self.character = character
+        self.end_offset = end_offset
         self.start = start
         self.end = end
         self.sentence = sentence
 
     def __str__(self):
-        return f"{self.character}: \"{self.sentence}\" ({self.start}-{self.end})"
+        return f"{self.character}: \"{self.sentence}\" (offset={self.end_offset}) ({self.start}-{self.end})"
 
 def add_script_lines(script_lines, dialogue, character, start, end):
-    speech = " ".join(dialogue)
+    speech = " ".join(dialogue).strip()
+
+    print(speech)
+
+    end_offset = 0
+    if(speech.endswith("--")):
+        end_offset = -2
+    elif(speech.endswith(". . .")):
+        end_offset = 2
+    
     speech = remove_parenthesis(speech)
 
     # if speech == "":
     #     return
     for sentence in split_sentences(speech):
         script_lines.append(
-            ScriptLine(speech, sentence, character, start, end)
+            ScriptLine(speech, sentence, character, end_offset, start, end)
         )
 
 def parse_script(text, character_voices):
@@ -78,4 +88,5 @@ def remove_parenthesis(text):
     return re.sub(r"\([^)]*\)", "", text)
 
 def split_sentences(text):
-    return re.split(r"(?<=[.!?])\s+", text)
+    parts = re.split(r"(?<=[.!?])\s+", text)
+    return [s for s in parts if re.search(r"\w", s)]
