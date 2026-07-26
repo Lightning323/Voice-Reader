@@ -15,12 +15,13 @@ The signal was picked up as a distortion of gravitational waves.
 Numerous outposts informed us of strange anomalies in gravitational fields. 
 Most of the information was gathered from reconnaissance stations. After sufficient data and analysis can confirm with high certainty that there is intelligent life in sector SDSS J1426.
 
+RAMIREZ
+(fast, Shouting over the noise) Is the ship supposed to make this noise?
+
 . . .
 
 CARTER
 SDSS J1426 is a dead pocket. A stable star system tucked inside a dark matter void is mathematically impossible. How can you be certain of the origin?
-
-. . .
 
 
 """

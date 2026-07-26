@@ -67,7 +67,7 @@ class Character:
 CHARACTER_VOICES = {
     "RAMIREZ": Character("af_aoede", 1),
     "PATEL": Character("am_eric", 1),
-    "CARTER": Character("am_michael", 1, 1),
+    "CARTER": Character("am_michael", 1.25, 1),
     "ELANA": Character("af_sarah", 1),
     "MIGUEL": Character("bm_daniel", 1),
 }
@@ -152,7 +152,7 @@ def queue_script_audio(readerUI, scriptLines):
         )
 
         #Calculate how fast to speak a line
-        speed = clamp(speed * character.speed_multiplier, 0.05, 20)
+        speed = clamp(speed * character.speed_multiplier * line.speed_multiplier, 0.05, 20)
         volume_multiplier = character.volume_multiplier
 
         if(line.text.strip() == ""): #We still need to play silence
@@ -263,6 +263,7 @@ def playback(readerUI):
             readerUI.log(f'{sample.line.character}: "{sample.line.text}"')
             readerUI.set_status(f"{sample.line.character}")
 
+        print("Playing... ",sample.line, sample.volume_multiplier)
         play_audio(sample.audio, volume_multiplier=sample.volume_multiplier, end_offset=sample.line.end_offset)
 
     print("Playback thread exited")
