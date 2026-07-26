@@ -1,12 +1,12 @@
 {
     "RAMIREZ": {
         "voice": "af_heart",
-        "speed_multiplier": 2.0,
+        "speed_multiplier": -1.0,
         "volume_multiplier": 0.5
     },
     "PATEL": {
-        "voice": "am_michael",
-        "speed_multiplier": 1.0,
+        "voice": "am_ericff",
+        "speed_multiplier": -100000.0,
         "volume_multiplier": 0.5
     },
     "NARRATOR": {
@@ -15,8 +15,8 @@
         "volume_multiplier": 0.5
     },
     "CARTER": {
-        "voice": "am_adam",
-        "speed_multiplier": 1.0,
+        "voice": "am_michael",
+        "speed_multiplier": 1.2,
         "volume_multiplier": 0.5
     }
 }

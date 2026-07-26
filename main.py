@@ -49,20 +49,23 @@ class AudioSample:
 # ============================
 
 
-def generate_audio(text, voice, line, speed, volume_multiplier):
+def generate_audio(readerUI, text, voice, line, speed, volume_multiplier):
     global generated_characters
-
     generator = pipeline(text, voice=voice, speed=speed)
-    for _, _, audio in generator:
-        if generation_stop.is_set():
-            return
-        try:
+    try:
+        for _, _, audio in generator:
+            if generation_stop.is_set():
+                return
             audio_queue.put(AudioSample(audio, line, volume_multiplier), timeout=0.1)
-        finally:
-            generated_characters += len(line.text)
-            print("Generated:", generated_characters, "/", PLAY_AFTER_N_CHARACTERS)
-            if generated_characters > PLAY_AFTER_N_CHARACTERS:
-                play_event.set()
+    except:
+        print("Error generating audio for line:", line, voice)
+        readerUI.log(f"ERROR! Could not generate audio for voice: {voice}")
+        pass
+    finally:
+        generated_characters += len(line.text)
+        print("Generated:", generated_characters, "/", PLAY_AFTER_N_CHARACTERS)
+        if generated_characters > PLAY_AFTER_N_CHARACTERS:
+            play_event.set()
 
 
 def clamp(value, min_value, max_value):
@@ -97,6 +100,7 @@ def queue_script_audio(readerUI, scriptLines):
             audio_queue.put(AudioSample(None, line, volume_multiplier), timeout=0.1)
         else:
             generate_audio(
+                readerUI,
                 line.text,
                 character.voice,
                 line,

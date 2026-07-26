@@ -42,7 +42,7 @@ class ScreenplayPlayer:
         )
 
 
-        ttk.Button(toolbar, text="Clear", command=self.clear_script).pack(side="left", padx=5)
+        ttk.Button(toolbar, text="Clear Script", command=self.clear_script).pack(side="right", padx=5)
 
         self.status = ttk.Label(toolbar, text="Idle")
 
@@ -138,7 +138,7 @@ class ScreenplayPlayer:
 
             # Character editor starts at ~300px tall
             right_height = self.right_paned.winfo_height()
-            self.right_paned.sashpos(0, max(150, right_height - 300))
+            self.right_paned.sashpos(0, max(150, right_height - 400))
 
         self.root.after(10, init_layout)
 
