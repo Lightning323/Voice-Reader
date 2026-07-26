@@ -186,6 +186,50 @@ class CharacterEditor(ttk.Frame):
             widget.bind("<FocusOut>", self.auto_save)
             widget.bind("<Return>", self.auto_save)
 
+    #Validaiton
+    def validate_name(self, value):
+        # Allow empty while editing
+        return True
+
+
+    def validate_voice(self, value):
+        return True
+
+
+    def validate_speed(self, value):
+        if value == "":
+            return True
+
+        try:
+            value = float(value)
+            return 0.05 <= value <= 20
+        except ValueError:
+            return False
+
+
+    def validate_volume(self, value):
+        if value == "":
+            return True
+
+        try:
+            value = float(value)
+            return 0 <= value <= 1
+        except ValueError:
+            return False
+
+
+    def normalize_name(self, event=None):
+        value = self.name_entry.get().strip().upper()
+
+        self.name_entry.delete(0, tk.END)
+        self.name_entry.insert(0, value)
+
+
+    def normalize_voice(self, event=None):
+        value = self.voice_entry.get().strip().lower()
+
+        self.voice_entry.delete(0, tk.END)
+        self.voice_entry.insert(0, value)
 
 
     def load_character(self, event=None):
@@ -219,25 +263,26 @@ class CharacterEditor(ttk.Frame):
 
         del self.characters[name]
 
-        # Refresh list
         self.character_list.delete(0, tk.END)
 
-        for character_name in self.characters:
-            self.character_list.insert(tk.END, character_name)
+        for name in self.characters:
+            self.character_list.insert(tk.END, name)
 
-        # Clear fields
-        self.selected_character = None
+        index = list(self.characters.keys()).index(name)
 
-        self.name_entry.delete(0, tk.END)
-        self.voice_entry.delete(0, tk.END)
-        self.speed_entry.delete(0, tk.END)
-        self.volume_entry.delete(0, tk.END)
+        self.character_list.selection_clear(0, tk.END)
+        self.character_list.selection_set(index)
+        self.character_list.event_generate("<<ListboxSelect>>")
 
         save_characters(self.characters)
 
     def auto_save(self, event=None):
         if self.selected_character is None:
             return
+
+        # Normalize text
+        self.normalize_name()
+        self.normalize_voice()
 
         old_name = self.selected_character
         new_name = self.name_entry.get().strip()
@@ -255,49 +300,20 @@ class CharacterEditor(ttk.Frame):
         except ValueError:
             return
 
-        # Handle rename
+        # Rename
         if new_name != old_name:
-            self.characters[new_name] = character
-            del self.characters[old_name]
-            self.selected_character = new_name
 
-            self.character_list.delete(0, tk.END)
+            # Prevent overwriting another character
+            if new_name in self.characters:
+                return
 
-            for name in self.characters:
-                self.character_list.insert(tk.END, name)
-
-            index = list(self.characters.keys()).index(new_name)
-            self.character_list.selection_set(index)
-
-        save_characters(self.characters)
-
-
-    def save_character(self):
-        if self.selected_character is None:
-            return
-
-        old_name = self.selected_character
-        new_name = self.name_entry.get().strip()
-
-        if not new_name:
-            return
-
-        character = self.characters[old_name]
-
-        # Update values
-        character.voice = self.voice_entry.get()
-        character.speed_multiplier = float(self.speed_entry.get())
-        character.volume_multiplier = float(self.volume_entry.get())
-
-        # Rename character
-        if new_name != old_name:
             self.characters[new_name] = character
             del self.characters[old_name]
 
             self.selected_character = new_name
 
-            # Refresh list
             self.character_list.delete(0, tk.END)
+
             for name in self.characters:
                 self.character_list.insert(tk.END, name)
 

@@ -14,9 +14,9 @@
         "speed_multiplier": 1.0,
         "volume_multiplier": 0.5
     },
-    "CARTER": {
-        "voice": "am_michael",
-        "speed_multiplier": 1.2,
-        "volume_multiplier": 0.5
+    "CARTERASDF": {
+        "voice": "am_michaelff",
+        "speed_multiplier": -1000000000000.2,
+        "volume_multiplier": 100.5
     }
 }
