@@ -3,7 +3,7 @@ import json
 
 class Character:
     def __init__(self, voice, speed_multiplier, volume_multiplier=0.5):
-        self.voice = voice
+        self.voice = voice.lower().strip()
         self.speed_multiplier = speed_multiplier
         self.volume_multiplier = volume_multiplier
 

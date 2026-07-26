@@ -52,75 +52,72 @@ class ScreenplayPlayer:
         body = ttk.Frame(self.root)
         body.pack(fill="both", expand=True, padx=10, pady=10)
 
-        # Columns
-        body.columnconfigure(0, weight=3)  # screenplay
-        body.columnconfigure(1, weight=1)  # right panel
-        body.rowconfigure(0, weight=1)
+        # ==========================================
+        # Main horizontal splitter
+        # ==========================================
 
-        # screenplay
+        main_paned = ttk.PanedWindow(body, orient=tk.HORIZONTAL)
+        main_paned.pack(fill="both", expand=True)
+
+        screenplay_frame = ttk.Frame(main_paned)
+        right_panel = ttk.Frame(main_paned)
+
+        main_paned.add(screenplay_frame, weight=3)
+        main_paned.add(right_panel, weight=1)
+
+        # ==========================================
+        # Screenplay
+        # ==========================================
+
         self.script = tk.Text(
-            body,
+            screenplay_frame,
             wrap="word",
             font=("Consolas", 14)
         )
 
-        self.script.grid(
-            row=0,
-            column=0,
-            sticky="nsew",
-            padx=(0, 5)
-        )
+        self.script.pack(fill="both", expand=True)
 
-        # highlight styles
+        # Highlight styles
         self.script.tag_configure("gen", background="#dddddd", foreground="black")
         self.script.tag_configure("current", background="#ffd54f", foreground="black")
         self.script.tag_configure("character", foreground="#1565c0")
         self.script.tag_configure("narration", foreground="#555555")
 
-       
+        # ==========================================
+        # Right vertical splitter
+        # ==========================================
+
+        right_paned = ttk.PanedWindow(right_panel, orient=tk.VERTICAL)
+        right_paned.pack(fill="both", expand=True)
+
         # -----------------------------
-        # Right side panel
+        # Output log
         # -----------------------------
 
-        right_panel = ttk.Frame(body)
+        output_frame = ttk.Frame(right_paned)
 
-        right_panel.grid(
-            row=0,
-            column=1,
-            sticky="nsew"
-        )
-
-        right_panel.columnconfigure(0, weight=1)
-        right_panel.rowconfigure(0, weight=1)  # output
-        right_panel.rowconfigure(1, weight=1)  # character editor
-
-
-        # Output
         self.output = tk.Text(
-            right_panel,
+            output_frame,
             state="disabled",
             bg="#222",
             fg="white",
-            font=("Consolas", 11)
+            font=("Consolas", 11),
         )
 
-        self.output.grid(
-            row=0,
-            column=0,
-            sticky="nsew",
-            pady=(0, 5)
-        )
+        self.output.pack(fill="both", expand=True)
 
-
+        # -----------------------------
         # Character editor
-        self.character_editor = CharacterEditor(right_panel)
+        # -----------------------------
 
-        self.character_editor.grid(
-            row=1,
-            column=0,
-            sticky="nsew",
-            pady=(5, 0)
-        )
+        character_frame = ttk.Frame(right_paned)
+
+        self.character_editor = CharacterEditor(character_frame)
+        self.character_editor.pack(fill="both", expand=True)
+
+        # Add panes
+        right_paned.add(output_frame, weight=1)
+        right_paned.add(character_frame, weight=1)
 
     # ========================================================
     # UI HELPERS
