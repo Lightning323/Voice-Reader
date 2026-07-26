@@ -90,16 +90,20 @@ play_event = threading.Event()  # Playback allowed
 shutdown_event = threading.Event()  # App closing
 generation_stop = threading.Event()  # Stop current generation
 
-QUEUE_SIZE = 20
-audio_queue = queue.Queue(maxsize=QUEUE_SIZE)
+# QUEUE_SIZE = 4000
+audio_queue = queue.Queue()
+
+PLAY_AFTER_N_LINES = 6
 
 gen_thread = None
 
 
 class AudioSample:
-    def __init__(self, audio, line):
+    def __init__(self, audio, line, volume_multiplier, end_offset):
         self.audio = audio
         self.line = line
+        self.volume_multiplier = volume_multiplier
+        self.end_offset = end_offset
 
 
 # ============================
@@ -107,16 +111,16 @@ class AudioSample:
 # ============================
 
 
-def generate_audio(text, voice, speed, line):
+def generate_audio(text, voice,  line, speed, volume_multiplier, end_offset):
     generator = pipeline(text, voice=voice, speed=speed)
     for _, _, audio in generator:
         if generation_stop.is_set():
             return
         while True:
             try:
-                audio_queue.put(AudioSample(audio, line), timeout=0.1)
+                audio_queue.put(AudioSample(audio, line, volume_multiplier, end_offset), timeout=0.1)
                 break
-            except queue.Full:
+            except queue.Full: #If we cant add to the queue, we must simply drop the audio
                 if generation_stop.is_set():
                     return
     audio_queue.put(None)
@@ -125,21 +129,43 @@ def clamp(value, min_value, max_value):
     return max(min(value, max_value), min_value)
 
 def queue_script_audio(readerUI, scriptLines):
+    generated_lines = 0
     for line in scriptLines:
         if generation_stop.is_set():
             break
+
+        #Only start playback after 3 lines
+        generated_lines += 1
+        if(generated_lines > PLAY_AFTER_N_LINES): 
+            play_event.set()
+        
         speed = 1
         if readerUI:
             readerUI.highlight_gen(f"{line.start}.0", f"{line.end}.end")
             speed = readerUI.speed.get()
 
-        voice = (
+        character = (
             CHARACTER_VOICES[line.character]
             if line.character in CHARACTER_VOICES
             else NARRATOR_VOICE
         )
 
-        generate_audio(line.sentence, voice.voice, clamp(speed * voice.speed_multiplier, 0.05, 20), line)
+        #Calculate if there should be interruptions or long pauses
+        end_offset = 0
+        if(line.sentence.strip().endswith("--")):
+            end_offset = -3
+        elif(line.sentence.strip().endswith(". . .")):
+            end_offset = 2
+            line.sentence = line.replace(". . .", ".")
+
+        #Calculate how fast to speak a sentence
+        speed = clamp(speed * character.speed_multiplier, 0.05, 20)
+
+        generate_audio(line.sentence, character.voice, line,
+                        speed=speed, volume_multiplier=character.volume_multiplier, end_offset=end_offset)
+
+    #Or playback if there are no lines if less than 3 in the script
+    play_event.set()
 
 
 # ============================
@@ -150,9 +176,6 @@ def queue_script_audio(readerUI, scriptLines):
 def play(readerUI, text):
     global gen_thread
     readerUI.set_status("Playing...")
-
-    # Resume playback
-    play_event.set()
 
     # Stop old generation if any
     generation_stop.set()
@@ -173,6 +196,7 @@ def play(readerUI, text):
         target=queue_script_audio, args=(readerUI, script_lines), daemon=True
     )
     gen_thread.start()
+
     readerUI.log("Playback started")
 
 
@@ -222,13 +246,12 @@ def playback(readerUI):
     while not shutdown_event.is_set():
         # Wait until Play is pressed
         play_event.wait()
-        # print("Playback thread started")
 
         if shutdown_event.is_set():
             break
 
         try:
-            sample = audio_queue.get(timeout=0.5)
+            sample = audio_queue.get(timeout=0.25)
         except queue.Empty:
             continue
 
@@ -242,14 +265,7 @@ def playback(readerUI):
             )
             readerUI.log(f'{sample.line.character}: "{sample.line.sentence}"')
             readerUI.set_status(f"{sample.line.character}")
-
-
-        characterVoice = (
-            CHARACTER_VOICES[sample.line.character]
-            if sample.line.character in CHARACTER_VOICES
-            else NARRATOR_VOICE
-        )
-        play_audio(sample.audio, characterVoice.volume_multiplier)
+        play_audio(sample.audio, volume_multiplier=sample.volume_multiplier, end_offset=sample.end_offset)
 
     print("Playback thread exited")
 

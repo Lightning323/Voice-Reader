@@ -9,7 +9,7 @@ pygame.mixer.init(
     channels=1
 )
 
-def play_audio(audio, volume_multiplier=1):
+def play_audio(audio, volume_multiplier, end_offset):
     audio = (
         audio.detach()
         .cpu()
@@ -25,7 +25,8 @@ def play_audio(audio, volume_multiplier=1):
 
     sound = pygame.mixer.Sound(buffer=audio.tobytes())
     sound.set_volume(max(0.0, min(1.0, volume_multiplier)))
-    delay = max(0, sound.get_length())
+    # print("End offset:", end_offset)
+    delay = max(0.1, sound.get_length() + end_offset)
     sound.play()
-    # print(delay)
+    # print("delay:", delay)
     time.sleep(delay)
