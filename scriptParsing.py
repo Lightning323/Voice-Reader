@@ -41,7 +41,7 @@ def add_script_line(script_lines, speech, character, start, end):
     #Interruption / pause adjustment
     if speech.endswith("--") or speech.endswith("—") or speech.endswith("-"):
         end_offset = -1.5 / speed_multiplier
-    elif speech.endswith(". . .") or speech.endswith("…"):
+    elif speech.endswith(". . .") or speech.endswith("...") or speech.endswith("…"):
         end_offset = 2 / speed_multiplier
 
     speech = speech.replace(". . .", "").replace("…", "...")
