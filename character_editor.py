@@ -190,36 +190,12 @@ class CharacterEditor(ttk.Frame):
             widget.bind("<FocusOut>", self.auto_save)
             widget.bind("<Return>", self.auto_save)
 
-    #Validaiton
-    def validate_name(self, value):
-        # Allow empty while editing
-        return True
-
-
-    def validate_voice(self, value):
-        return True
-
-
-    def validate_speed(self, value):
-        if value == "":
-            return True
-
+    def normalize_float(self, value, min_value, max_value):
         try:
             value = float(value)
-            return 0.05 <= value <= 20
+            return max(min(value, max_value), min_value)
         except ValueError:
-            return False
-
-
-    def validate_volume(self, value):
-        if value == "":
-            return True
-
-        try:
-            value = float(value)
-            return 0 <= value <= 1
-        except ValueError:
-            return False
+            return min_value
 
 
     def normalize_name(self, event=None):
@@ -297,12 +273,9 @@ class CharacterEditor(ttk.Frame):
         character = self.characters[old_name]
 
         character.voice = self.voice_entry.get()
+        character.speed_multiplier = self.normalize_float(self.speed_entry.get(), 0.1, 100.0)
+        character.volume_multiplier = self.normalize_float(self.volume_entry.get(), 0.0, 1.0)
 
-        try:
-            character.speed_multiplier = float(self.speed_entry.get())
-            character.volume_multiplier = float(self.volume_entry.get())
-        except ValueError:
-            return
 
         # Rename
         if new_name != old_name:
