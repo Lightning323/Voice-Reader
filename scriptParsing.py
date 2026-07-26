@@ -25,18 +25,23 @@ def add_script_line(script_lines, speech, character, start, end):
     speech = speech.strip()
 
     #Speed adjustment
-    if in_parentheses(speech.lower(), ["_f_", "rapid","fast","frantic","quick","quick"]):
+    fast_format = " ".join(
+        speech.replace(",", "").replace(".", "").split()
+    )
+    #Fast
+    if in_parentheses(fast_format, ["_fff_", "very very fast", "very very rapid", "very very frantic", "very very quick"]):
+        speed_multiplier = 1.7
+    elif in_parentheses(fast_format, ["_ff_", "very fast", "very rapid", "very frantic", "very quick"]):
+        speed_multiplier = 1.4
+    elif in_parentheses(fast_format, ["_f_", "fast", "rapid", "frantic", "quick"]):
         speed_multiplier = 1.28
-        if(in_parentheses(speech.lower(), ["_fff_"])):
-            speed_multiplier = 1.8
-        elif(in_parentheses(speech.lower(), ["very", "_ff_"])):
-            speed_multiplier = 1.4
-    elif in_parentheses(speech.lower(), ["_s_", "slow","methodical","thorough"]):
+    #Slow
+    elif in_parentheses(fast_format, ["_sss_", "very very slow", "very very methodical", "very very thorough"]):
+        speed_multiplier = 0.45
+    elif in_parentheses(fast_format, ["_ss_", "very slow", "very methodical", "very thorough"]):
+        speed_multiplier = 0.52
+    elif in_parentheses(fast_format, ["_s_", "slow", "methodical", "thorough"]):
         speed_multiplier = 0.75
-        if(in_parentheses(speech.lower(), ["_sss_"])):
-            speed_multiplier = 0.4
-        elif(in_parentheses(speech.lower(), ["very", "_ss_"])):
-            speed_multiplier = 0.5
 
     #Interruption / pause adjustment
     if speech.endswith("--") or speech.endswith("—") or speech.endswith("-"):
