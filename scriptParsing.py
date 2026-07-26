@@ -3,7 +3,7 @@ import re
 
 class ScriptLine:
     def __init__(self, text, character, speed_multiplier, end_offset, start, end):
-        self.text = text
+        self.text = text.strip()
         self.character = character
 
         #Should we subtract N seconds or add N seconds to the audio file?
