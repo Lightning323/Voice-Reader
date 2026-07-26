@@ -5,6 +5,7 @@ class ScriptLine:
     def __init__(self, text, character, end_offset, start, end):
         self.text = text
         self.character = character
+        #Should we subtract N seconds or add N seconds to the audio file?
         self.end_offset = end_offset
         #Line start and end
         self.start = start
@@ -17,7 +18,7 @@ class ScriptLine:
 def add_script_line(script_lines, speech, character, start, end):
     end_offset = 0
     if speech.endswith("--"):
-        end_offset = -2
+        end_offset = -1.5
     elif speech.endswith(". . ."):
         end_offset = 2
 
