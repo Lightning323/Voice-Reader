@@ -19,4 +19,4 @@ Adding an indicator in parentheses can change the reading speed of that line.
 Put a hyphen (`--` or `-`) at the end of a line to interrupt the line.
 
 ### Pauses
-Put 3 dots (`. . .`, `…` or `...`) at the end of a line or on a newline to pause for a few seconds.
+Put 2 or more dots (`. . .`, `…` or `...`) at the end of a line or on a newline to pause for a few seconds. The more dots, the longer the pause.
