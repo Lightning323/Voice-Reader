@@ -16,7 +16,7 @@ Adding an indicator in parentheses can change the reading speed of that line.
     * `(_fff_)`, `(_sss_)` for increased speed, etc.
 
 ### Interruptions
-Put a "`--`" at the end of a line to interrupt the line.
+Put a hyphen (`--` or `-`) at the end of a line to interrupt the line.
 
 ### Pauses
 Put a "`. . .`" at the end of a line or on a newline to pause for a few seconds.
