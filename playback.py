@@ -10,23 +10,26 @@ pygame.mixer.init(
 )
 
 def play_audio(audio, volume_multiplier, end_offset):
-    audio = (
-        audio.detach()
-        .cpu()
-        .numpy()
-        .flatten()
-    )
+    if(audio is None): #Still play a pause
+        time.sleep(max(1, 1+end_offset))
+    else:
+        audio = (
+            audio.detach()
+            .cpu()
+            .numpy()
+            .flatten()
+        )
 
-    audio = np.clip(
-        audio * 32767,
-        -32768,
-        32767
-    ).astype(np.int16)
+        audio = np.clip(
+            audio * 32767,
+            -32768,
+            32767
+        ).astype(np.int16)
 
-    sound = pygame.mixer.Sound(buffer=audio.tobytes())
-    sound.set_volume(max(0.0, min(1.0, volume_multiplier)))
-    # print("End offset:", end_offset)
-    delay = max(0.1, sound.get_length() + end_offset)
-    sound.play()
-    # print("delay:", delay)
-    time.sleep(delay)
+        sound = pygame.mixer.Sound(buffer=audio.tobytes())
+        sound.set_volume(max(0.0, min(1.0, volume_multiplier)))
+        # print("End offset:", end_offset)
+        delay = max(0.1, sound.get_length() + end_offset)
+        sound.play()
+        # print("delay:", delay)
+        time.sleep(delay)

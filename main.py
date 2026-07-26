@@ -93,7 +93,7 @@ generation_stop = threading.Event()  # Stop current generation
 # QUEUE_SIZE = 4000
 audio_queue = queue.Queue()
 
-PLAY_AFTER_N_CHARACTERS = 100
+PLAY_AFTER_N_CHARACTERS = 1000
 
 gen_thread = None
 
@@ -136,7 +136,6 @@ def queue_script_audio(readerUI, scriptLines):
 
         #Only start playback after 3 lines
         generated_characters += len(line.text)
-        print(generated_characters)
         if(generated_characters > PLAY_AFTER_N_CHARACTERS): 
             play_event.set()
         
@@ -153,9 +152,13 @@ def queue_script_audio(readerUI, scriptLines):
 
         #Calculate how fast to speak a line
         speed = clamp(speed * character.speed_multiplier, 0.05, 20)
+        volume_multiplier = character.volume_multiplier
 
-        generate_audio(line.text, character.voice, line,
-                        speed=speed, volume_multiplier=character.volume_multiplier)
+        if(line.text.strip() == ""): #We still need to play silence
+            audio_queue.put(AudioSample(None, line, volume_multiplier), timeout=0.1)
+        else:
+            generate_audio(line.text, character.voice, line,
+                            speed=speed, volume_multiplier=volume_multiplier)
 
     #Or playback if there are no lines if less than 3 in the script
     play_event.set()
@@ -258,6 +261,7 @@ def playback(readerUI):
             )
             readerUI.log(f'{sample.line.character}: "{sample.line.text}"')
             readerUI.set_status(f"{sample.line.character}")
+
         play_audio(sample.audio, volume_multiplier=sample.volume_multiplier, end_offset=sample.line.end_offset)
 
     print("Playback thread exited")
