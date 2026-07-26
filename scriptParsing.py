@@ -23,23 +23,23 @@ def add_script_line(script_lines, speech, character, start, end):
     end_offset = 0
     speed_multiplier = 1
 
-    #Interruption / pause adjustment
-    if speech.endswith("--"):
-        end_offset = -1.5
-    elif speech.endswith(". . ."):
-        end_offset = 2
-
     #Speed adjustment
-    if in_parentheses(speech.lower(), ["fast","frantic","quick","quick"]):
+    if in_parentheses(speech.lower(), ["_f_", "rapid","fast","frantic","quick","quick"]):
         speed_multiplier = 1.28
-        if(in_parentheses(speech.lower(), ["very"])):
+        if(in_parentheses(speech.lower(), ["very", "_ff_"])):
             speed_multiplier = 1.4
-    elif in_parentheses(speech.lower(), ["slow","methodical","thorough"]):
+    elif in_parentheses(speech.lower(), ["_s_", "slow","methodical","thorough"]):
         speed_multiplier = 0.75
-        if(in_parentheses(speech.lower(), ["very"])):
+        if(in_parentheses(speech.lower(), ["very", "_ss_"])):
             speed_multiplier = 0.5
 
-    speech = speech.replace(". . .", "")
+    #Interruption / pause adjustment
+    if speech.endswith("--"):
+        end_offset = -1.5 / speed_multiplier
+    elif speech.endswith(". . ."):
+        end_offset = 2 / speed_multiplier
+
+    speech = speech.replace(". . .", "").replace("…", "...")
     speech = remove_parenthesis(speech)
 
     script_lines.append(ScriptLine(speech, character, speed_multiplier, end_offset, start, end))
