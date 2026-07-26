@@ -11,6 +11,9 @@ class CharacterEditor(ttk.Frame):
 
         # Layout
         self.columnconfigure(0, weight=1)
+        self.rowconfigure(1, weight=1) 
+        self.rowconfigure(1, weight=1)
+        self.rowconfigure(3, weight=0)
 
         # ==================================================
         # Character List
@@ -22,14 +25,21 @@ class CharacterEditor(ttk.Frame):
             font=("", 10, "bold")
         ).grid(row=0, column=0, sticky="w", padx=5, pady=(5, 2))
 
-        self.character_list = tk.Listbox(self, height=6)
-        self.character_list.grid(
+        # Frame gives the listbox a minimum height
+        list_frame = ttk.Frame(self, height=200)
+        list_frame.grid(
             row=1,
             column=0,
             sticky="nsew",
             padx=5,
-            pady=(0, 5)
+            pady=(0, 5),
         )
+
+        # Prevent the frame from shrinking below 200px
+        list_frame.grid_propagate(False)
+
+        self.character_list = tk.Listbox(list_frame)
+        self.character_list.pack(fill="both", expand=True)
 
         for name in self.characters:
             self.character_list.insert(tk.END, name)
