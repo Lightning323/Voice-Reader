@@ -53,10 +53,12 @@ def generate_audio(readerUI, text, voice, line, speed, volume_multiplier):
     global generated_characters
     generator = pipeline(text, voice=voice, speed=speed)
     try:
+        audio_chunks = []
         for _, _, audio in generator:
             if generation_stop.is_set():
                 return
-            audio_queue.put(AudioSample(audio, line, volume_multiplier), timeout=0.1)
+            audio_chunks.append(audio)
+        audio_queue.put(AudioSample(audio_chunks, line, volume_multiplier), timeout=0.1)
     except:
         print("Error generating audio for line:", line, voice)
         readerUI.log(f"ERROR! Could not generate audio for voice: {voice}")
