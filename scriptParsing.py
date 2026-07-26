@@ -8,6 +8,7 @@ class ScriptLine:
 
         #Should we subtract N seconds or add N seconds to the audio file?
         self.end_offset = end_offset
+        #How fast should we speak this line
         self.speed_multiplier=speed_multiplier
 
         #Line start and end
@@ -22,15 +23,21 @@ def add_script_line(script_lines, speech, character, start, end):
     end_offset = 0
     speed_multiplier = 1
 
+    #Interruption / pause adjustment
     if speech.endswith("--"):
         end_offset = -1.5
     elif speech.endswith(". . ."):
         end_offset = 2
 
-    if speech.__contains__("fast") or speech.__contains__("frantic"):
-        speed_multiplier = 1.5
-    elif speech.__contains__("slow") or speech.__contains__("methodical"):
-        speed_multiplier = 0.5
+    #Speed adjustment
+    if in_parentheses(speech.lower(), ["fast","frantic","quick","quick"]):
+        speed_multiplier = 1.28
+        if(in_parentheses(speech.lower(), ["very"])):
+            speed_multiplier = 1.4
+    elif in_parentheses(speech.lower(), ["slow","methodical","thorough"]):
+        speed_multiplier = 0.75
+        if(in_parentheses(speech.lower(), ["very"])):
+            speed_multiplier = 0.5
 
     speech = speech.replace(". . .", "")
     speech = remove_parenthesis(speech)
@@ -75,6 +82,12 @@ def parse_script(text, character_voices):
 
     return script_lines
 
+def in_parentheses(text, words):
+    """Return True if any parenthesized text contains any word in words."""
+    for match in re.findall(r"\((.*?)\)", text):
+        if any(word in match for word in words):
+            return True
+    return False
 
 def remove_parenthesis(text):
     return re.sub(r"\([^)]*\)", "", text)

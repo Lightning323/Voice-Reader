@@ -122,7 +122,6 @@ def generate_audio(text, voice,  line, speed, volume_multiplier):
             except queue.Full: #If we cant add to the queue, we must simply drop the audio
                 if generation_stop.is_set():
                     return
-    audio_queue.put(None)
 
 def clamp(value, min_value, max_value):
     return max(min(value, max_value), min_value)
@@ -161,6 +160,8 @@ def queue_script_audio(readerUI, scriptLines):
             generate_audio(line.text, character.voice, line,
                             speed=speed, volume_multiplier=volume_multiplier)
 
+    #none to signal end
+    audio_queue.put(None)
     #Or playback if there are no lines if less than 3 in the script
     play_event.set()
 
@@ -254,6 +255,7 @@ def playback(readerUI):
 
         # End marker
         if sample is None:
+            stop(readerUI)
             continue
 
         if readerUI:
