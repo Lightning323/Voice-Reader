@@ -30,7 +30,7 @@ def add_script_line(script_lines, speech, character, start, end):
     )
     #Fast
     if in_parentheses(fast_format, ["_fff_", "very very fast", "very very rapid", "very very frantic", "very very quick"]):
-        speed_multiplier = 1.7
+        speed_multiplier = 1.6
     elif in_parentheses(fast_format, ["_ff_", "very fast", "very rapid", "very frantic", "very quick"]):
         speed_multiplier = 1.4
     elif in_parentheses(fast_format, ["_f_", "fast", "rapid", "frantic", "quick"]):
