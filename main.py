@@ -1,7 +1,7 @@
 import queue
 import ui
 from playback import play_audio
-import character_editor
+import characters
 # ============================================================
 # KOKORO SETUP
 # ============================================================
@@ -29,7 +29,8 @@ generation_stop = threading.Event()  # Stop current generation
 generated_characters = 0
 
 audio_queue = queue.Queue()
-
+character_voices = {}
+narrator_voice = characters.Character("af_heart", 1.0, 0.5)
 PLAY_AFTER_N_CHARACTERS = 750
 
 gen_thread = None
@@ -66,8 +67,15 @@ def generate_audio(text, voice, line, speed, volume_multiplier):
 def clamp(value, min_value, max_value):
     return max(min(value, max_value), min_value)
 
+def get_character_voice(character):
+    if character in character_voices:
+        return character_voices[character]
+    elif "NARRATOR" in character_voices:
+        return character_voices["NARRATOR"]
+    return narrator_voice
 
 def queue_script_audio(readerUI, scriptLines):
+    global character_voices
     for line in scriptLines:
         if generation_stop.is_set():
             break
@@ -76,11 +84,7 @@ def queue_script_audio(readerUI, scriptLines):
             readerUI.highlight_gen(f"{line.start}.0", f"{line.end}.end")
             speed = readerUI.speed.get()
 
-        character = (
-            CHARACTER_VOICES[line.character]
-            if line.character in CHARACTER_VOICES
-            else NARRATOR_VOICE
-        )
+        character = get_character_voice(line.character)
 
         # Calculate how fast to speak a line
         speed = clamp(
@@ -111,7 +115,7 @@ def queue_script_audio(readerUI, scriptLines):
 
 
 def play(readerUI, text):
-    global gen_thread, generated_characters
+    global gen_thread, generated_characters, character_voices
 
     generated_characters = 0
     readerUI.set_status("Playing...")
@@ -127,7 +131,8 @@ def play(readerUI, text):
 
     generation_stop.clear()
 
-    script_lines = scriptParsing.parse_script(text, CHARACTER_VOICES)
+    character_voices = characters.load_characters()
+    script_lines = scriptParsing.parse_script(text, character_voices)
 
     print(len(script_lines), "lines parsed.")
 
