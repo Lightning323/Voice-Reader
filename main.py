@@ -124,11 +124,12 @@ def play(readerUI, text):
             script_lines = []
 
             if(readerUI.dialog_mode):
-                script_lines = scriptParsing.parse_script(text, character_voices)
+                script_lines, new_text = scriptParsing.parse_script(text, character_voices)
                 print(len(script_lines), "dialog lines parsed.")
             else:
-                script_lines = scriptParsing.parse_text(text)
+                script_lines, new_text = scriptParsing.parse_text(text)
                 print(len(script_lines), "reader lines parsed.")
+                readerUI.set_script_contents(new_text)
             
 
             gen_thread = threading.Thread(

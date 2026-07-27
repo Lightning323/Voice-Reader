@@ -147,7 +147,7 @@ def parse_script(text, character_voices):
                 add_script_line(script_lines, dialogue, "NARRATOR", i + 1, i + 1)
                 i += 1
 
-    return script_lines
+    return script_lines, text
 
 
 
@@ -248,49 +248,33 @@ def parse_text(text):
     paragraphs = merge_lines_into_paragraphs(text)
 
     script_lines = []
+    new_text = []
 
     for paragraph, paragraph_line_start, paragraph_line_end in paragraphs:
 
         sentences = sent_tokenize(paragraph)
 
-        search_position = 0
-        current_line = paragraph_line_start
-
         for sentence in sentences:
-
-            # Find sentence inside paragraph
-            sentence_start = paragraph.find(sentence, search_position)
-            sentence_end = sentence_start + len(sentence)
-
-            search_position = sentence_end
-
-            # Count newlines before sentence
-            sentence_line_start = (
-                paragraph_line_start +
-                paragraph[:sentence_start].count("\n")
-            )
-
-            sentence_line_end = (
-                paragraph_line_start +
-                paragraph[:sentence_end].count("\n")
-            )
-
+            new_text.append(sentence)
+            
             speed_multiplier = 1.0
             end_offset = calculate_end_offset(sentence, speed_multiplier)
 
             sentence = format_line(sentence)
+
+            line_start = len(new_text)
 
             script_line = ScriptLine(
                 sentence,
                 "NARRATOR",
                 speed_multiplier,
                 end_offset,
-                sentence_line_start,
-                sentence_line_end,
+                line_start,
+                line_start,
                 0,
                 0
             )
-
             script_lines.append(script_line)
-
-    return script_lines
+        new_text.append("")
+    # TODO: It might be better to keep track of each sentence and read it without having to re-format the document
+    return script_lines, "\n".join(new_text)

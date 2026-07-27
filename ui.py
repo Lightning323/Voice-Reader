@@ -281,6 +281,10 @@ class VoiceReaderUI:
             self.script.tag_add("seek", index, end)
             self.script.see(index)
 
+    def set_script_contents(self, text):
+        self.script.delete("1.0", "end")
+        self.script.insert("1.0", text)
+
     def change_font_size(self, event, delta=0):
         if (event and event.delta > 0) or delta > 0:
             self.script_font_size += 1
