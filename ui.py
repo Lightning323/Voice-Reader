@@ -1,8 +1,6 @@
 import tkinter as tk
 import ttkbootstrap as ttk
-import tkinter as tk
-import threading
-import re
+
 import darkdetect
 
 from character_editor import CharacterEditor
@@ -322,7 +320,7 @@ class VoiceReaderUI:
         if isPlaybackMode:
             self.mode_dropdown.config(state="disabled")
         else:
-            self.mode_dropdown.config(state="normal")
+            self.mode_dropdown.config(state="readonly")
 
     def log(self, text):
         def update():
