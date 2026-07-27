@@ -71,7 +71,7 @@ def should_cancel_generation(my_gen_id):
 
 def generate(readerUI, scriptLines):
     global character_voices, buffer_char_size, gen_threads, latest_gen_id
-    cancel_generation(readerUI, max_iterations=60, delay=1) # We will wait up to 1 minute for generation to finish
+    cancel_generation(readerUI, max_iterations=3, delay=1) # We will wait up to 1 minute for generation to finish
 
     with gen_thread_lock:
         gen_threads += 1
