@@ -124,8 +124,9 @@ def parse_script(text, character_voices):
             i += 1
             continue
 
-        if line.upper() in character_voices:  # CHARACTER
-            character = line.upper()
+        line_character_formatted = line.upper().replace(":", "").strip()
+        if line_character_formatted in character_voices:  # CHARACTER
+            character = line_character_formatted
             i += 1
             while i < len(lines) and lines[i].strip():
                 dialogue = lines[i].strip()
