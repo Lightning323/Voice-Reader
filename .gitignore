@@ -1,0 +1,11 @@
+.venv
+*.pyc
+__pycache__
+characters.json
+dialog_characters.json
+reader_characters.json
+test scripts
+dist
+build
+test.py
+=0.9.4
