@@ -3,6 +3,7 @@ import threading
 import scriptParsing
 from playback import playback_thread, seek, start_playback, pause_playback, stop_playback, shutdown_playback,  audio_queue, generation_stop,generation_lock, set_audio_index
 import characters
+import time
 # ============================================================
 # KOKORO SETUP
 # ============================================================
@@ -19,6 +20,7 @@ print("Kokoro loaded.\n\n")
 
 cached_text = ""
 character_voices = {}
+gen_threads = 0
 #The fallback voice if no character voice is found
 narrator_voice = characters.Character("am_adam", 1.0, 0.5)
 gen_thread = None
@@ -55,40 +57,57 @@ def get_character_voice(character):
         return character_voices["NARRATOR"]
     return narrator_voice
 
-def queue_script_audio(readerUI, scriptLines):
-    global character_voices, buffer_char_size
-    for line in scriptLines:
-        if generation_stop.is_set():
-            print("Generation stopped.")
-            readerUI.log("Generation stopped.")
-            break
-        speed = 1
-        if readerUI:
-            readerUI.highlight_gen(f"{line.start}.0", f"{line.end}.end")
-            speed = readerUI.speed.get()
+def generate(readerUI, scriptLines):
+    global character_voices, buffer_char_size, gen_threads
+    cancel_generation(readerUI, max_iterations=50)
 
-        character = get_character_voice(line.character)
+    gen_threads += 1
+    audio_queue.clear()
+    character_voices = characters.load_characters(readerUI.dialog_mode)
+    generation_stop.clear() #If we are starting a new generation, clear the stop flag
+    readerUI.set_status("Buffering")
+    readerUI.log("Generating audio...")
+    print("Generating audio... Generation threads:", gen_threads)
+    set_audio_index(0)
 
-        # Calculate how fast to speak a line
-        speed = clamp(
-            speed * character.speed_multiplier * line.speed_multiplier, 0.05, 20
-        )
-        volume_multiplier = character.volume_multiplier
+    try:
+        for line in scriptLines:
+            if generation_stop.is_set():
+                return
+            speed = 1
+            if readerUI:
+                readerUI.highlight_gen(f"{line.start}.0", f"{line.end}.end")
+                speed = readerUI.speed.get()
 
-        if line.text.strip() == "":  # We still need to play silence
-            audio_queue.append(AudioSample(None, line, volume_multiplier))
-        else:
-            generate_audio(
-                readerUI,
-                line.text,
-                character.voice,
-                line,
-                speed=speed,
-                volume_multiplier=volume_multiplier,
+            character = get_character_voice(line.character)
+
+            # Calculate how fast to speak a line
+            speed = clamp(
+                speed * character.speed_multiplier * line.speed_multiplier, 0.05, 20
             )
+            volume_multiplier = character.volume_multiplier
 
-    # none to signal end
-    audio_queue.append(None)
+            if line.text.strip() == "":  # We still need to play silence
+                audio_queue.append(AudioSample(None, line, volume_multiplier))
+            else:
+                generate_audio(
+                    readerUI,
+                    line.text,
+                    character.voice,
+                    line,
+                    speed=speed,
+                    volume_multiplier=volume_multiplier,
+                )
+        # none to signal end
+        audio_queue.append(None)
+
+    except Exception as e:
+        print("Error generating audio:", e)
+        readerUI.log(f"ERROR! Could not generate audio for line: {line}")
+    finally:
+        gen_threads -= 1
+        readerUI.log("Generation stopped.")
+        print("Generation stopped. threads:", gen_threads)
 
 
 # ============================
@@ -96,32 +115,27 @@ def queue_script_audio(readerUI, scriptLines):
 # ============================
 
 
+def cancel_generation(readerUI, max_iterations=5):
+    for i in range(0, max_iterations):
+        if gen_threads > 0:
+            #print("Previous Generation hasn't finished yet... gen threads:", gen_threads)
+            readerUI.log("Previous Generation hasn't finished yet...")
+            readerUI.set_status("Cancelling generation...")
+            generation_stop.set()
+            time.sleep(0.5)
+        else:
+            break
+
 def play(readerUI, text):
-    global gen_thread, character_voices, cached_text, generation_lock
+    global gen_thread, character_voices, cached_text, generation_lock, gen_threads
 
     with generation_lock:
         #only generate if text has changed or audio queue is empty
         should_generate = len(audio_queue) == 0 or (text != cached_text)
 
-        start_playback(readerUI)
-
         if should_generate:  #Generate
-            print("Generating... dialog mode:", readerUI.dialog_mode)
-            cached_text = text
-            set_audio_index(0)
-        
-            # Stop old generation if any
-            generation_stop.set()
-
-            if gen_thread and gen_thread.is_alive():
-                print("Previous Generation hasn't finished yet...")
-
-            # Clear old audio 
-
-            audio_queue.clear()
-            generation_stop.clear()
-            character_voices = characters.load_characters(readerUI.dialog_mode)
-            script_lines = []
+            cancel_generation(readerUI, max_iterations=1)  # We block here and in the thread itself, but we dont want to wait too long here because it will block the UI
+            print("Preparing to Generating... dialog mode:", readerUI.dialog_mode, "gen threads:", gen_threads)
 
             if(readerUI.dialog_mode):
                 script_lines, new_text = scriptParsing.parse_script(text, character_voices)
@@ -130,14 +144,15 @@ def play(readerUI, text):
                 script_lines, new_text = scriptParsing.parse_text(text)
                 print(len(script_lines), "reader lines parsed.")
                 readerUI.set_script_contents(new_text)
-            
+
+            #Make sure we get cached text EXACTLY as it is in the UI
+            cached_text = readerUI.get_script_contents()
 
             gen_thread = threading.Thread(
-                target=queue_script_audio, args=(readerUI, script_lines), daemon=True
+                target=generate, args=(readerUI, script_lines), daemon=True
             )
             gen_thread.start()
-            readerUI.set_status("Buffering")
-            readerUI.log("Generating audio...")
+            start_playback(readerUI)
 
 
 def change_mode(readerUI, dialog_mode):

@@ -111,6 +111,10 @@ def playback_thread(readerUI):
         try:
             play_event.wait()  # Wait until Play is pressed
 
+            if(generation_stop.is_set()): #Dont play if generation is stopped
+                time.sleep(0.1)
+                continue
+
             # If the buffer is incomplete and there are less than N samples
             if len(audio_queue) < 100 and (
                 len(audio_queue) == 0 or audio_queue[-1] is not None
@@ -151,9 +155,9 @@ def playback_thread(readerUI):
                     readerUI.highlight_playback(
                         f"{sample.line.start}.0", f"{sample.line.end}.end"
                     )
-                    readerUI.log(f'{sample.line.character}: "{sample.line.text}"')
+                    readerUI.log(f'{sample.line.character}: ({playback_index}) "{sample.line.text}"')
                     readerUI.set_status(f"{sample.line.character}")
-                print("Playing... ", sample.line, sample.volume_multiplier)
+                print("Playing... ", playback_index, sample.line, sample.volume_multiplier)
                 interrupted = play_audio(
                     sample.audio,
                     volume_multiplier=sample.volume_multiplier,

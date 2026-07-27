@@ -285,6 +285,9 @@ class VoiceReaderUI:
         self.script.delete("1.0", "end")
         self.script.insert("1.0", text)
 
+    def get_script_contents(self):
+        return self.script.get("1.0", "end-1c")
+
     def change_font_size(self, event, delta=0):
         if (event and event.delta > 0) or delta > 0:
             self.script_font_size += 1
@@ -353,7 +356,7 @@ class VoiceReaderUI:
     def play(self):
         global stop_flag
         stop_flag = False
-        text = self.script.get("1.0", "end")
+        text = self.get_script_contents()
         self.playRunnable(self, text)
 
     def pause(self):

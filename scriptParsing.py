@@ -277,4 +277,4 @@ def parse_text(text):
             script_lines.append(script_line)
         new_text.append("")
     # TODO: It might be better to keep track of each sentence and read it without having to re-format the document
-    return script_lines, "\n".join(new_text)
+    return script_lines, "\n".join(new_text).rstrip()
