@@ -318,7 +318,7 @@ class VoiceReaderUI:
         def update():
             self.script.tag_remove("seek", "1.0", "end")
             self.script.tag_add("seek", start, end)
-            self.script.see(start)
+            self.script.see(end)
 
         self.ui(update)
 
