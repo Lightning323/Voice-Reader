@@ -304,7 +304,7 @@ class VoiceReaderUI:
         def update():
             self.script.tag_remove("current", "1.0", "end")
             self.script.tag_add("current", start, end)
-            self.script.see(start)
+            self.script.see(end)
         self.ui(update)
 
     def highlight_gen(self, start, end):
