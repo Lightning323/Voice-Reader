@@ -146,10 +146,6 @@ class VoiceReaderUI:
         self.script.tag_configure("current", background="#b58900", foreground="black")
         # self.script.tag_configure("character", foreground="#4fc3f7")
         # self.script.tag_configure("narration", foreground="#bbbbbb")
-
-        # ==========================================
-        # Keyboard Shortcuts
-        # ==========================================
         self.script.bind("<Control-z>", lambda e: (self.script.edit_undo(), "break"))
         self.script.bind("<Control-y>", lambda e: (self.script.edit_redo(), "break"))
         self.script.bind(
