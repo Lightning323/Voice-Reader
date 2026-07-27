@@ -4,6 +4,7 @@ import tkinter as tk
 import threading
 import re
 import darkdetect
+from tkinter import simpledialog
 
 from character_editor import CharacterEditor
 
@@ -55,9 +56,6 @@ class VoiceReaderUI:
         )
         self.speed_dial = ttk.Label(toolbar, text="1x").pack(side="left", padx=(10, 5))
 
-
-        ttk.Button(toolbar, text="Clear Text", command=self.clear_script).pack(side="right", padx=5)
-
         self.selected_mode = tk.StringVar(value="Dialog Mode")
         self.mode_dropdown = ttk.Combobox(
             toolbar,
@@ -96,26 +94,96 @@ class VoiceReaderUI:
         self.main_paned.add(right_panel, weight=1)
 
         # ==========================================
-        # Screenplay
+        # Screenplay Editor
         # ==========================================
 
+        script_frame = ttk.Frame(screenplay_frame)
+        script_frame.pack(fill="both", expand=True)
+
+        # -----------------------------
+        # Text editor
+        # -----------------------------
+        script_scroll = ttk.Scrollbar( script_frame, orient="vertical")
+
+        self.script_font_size = 12
         self.script = tk.Text(
-            screenplay_frame,
-            bg="#141414",
-            fg="#d4d4d4",
+            script_frame,
             insertbackground="white",
             selectbackground="#264f78",
             wrap="word",
-            font=("Consolas", 12),
+            undo=True,
+            maxundo=-1,
+            autoseparators=True,
+            padx=10,
+            pady=10,
+            spacing1=2,
+            spacing3=4,
+            font=("Consolas", self.script_font_size),
+            yscrollcommand=script_scroll.set
         )
 
-        self.script.pack(fill="both", expand=True)
+        
+        script_scroll.config(command=self.script.yview)
+        script_scroll.pack(side="right", fill="y")
+        self.script.pack(side="left", fill="both", expand=True)
 
         self.script.tag_configure("gen", background="#404040", foreground="white")
         self.script.tag_configure("seek", background="#005bb5", foreground="black")
         self.script.tag_configure("current", background="#b58900", foreground="black")
-        self.script.tag_configure("character", foreground="#4fc3f7")
-        self.script.tag_configure("narration", foreground="#bbbbbb")
+        # self.script.tag_configure("character", foreground="#4fc3f7")
+        # self.script.tag_configure("narration", foreground="#bbbbbb")
+
+        # ==========================================
+        # Screenplay Keyboard shortcuts
+        # ==========================================
+
+        # Undo
+        self.script.bind(
+            "<Control-z>",
+            lambda e: (
+                self.script.edit_undo(),
+                "break"
+            )
+        )
+
+        # Redo
+        self.script.bind(
+            "<Control-y>",
+            lambda e: (
+                self.script.edit_redo(),
+                "break"
+            )
+        )
+
+        # Select all
+        self.script.bind(
+            "<Control-a>",
+            lambda e: (
+                self.script.tag_add("sel", "1.0", "end"),
+                "break"
+            )
+        )
+
+        # ==========================================
+        # Screenplay Search shortcut
+        # ==========================================
+
+        def search_text(event=None):
+            query = simpledialog.askstring("Find","Search text:")
+            if not query:
+                return "break"
+
+            self.script.tag_remove("seek","1.0","end")
+            index = self.script.search(query,"1.0",stopindex="end")
+
+            if index:
+                end = f"{index}+{len(query)}c"
+                self.script.tag_add("seek",index,end)
+                self.script.see(index)
+
+            return "break"
+
+        self.script.bind("<Control-f>",search_text)
         # ==========================================
         # Right vertical splitter
         # ==========================================
@@ -190,9 +258,7 @@ class VoiceReaderUI:
         if dark:
             self.script.config(
                 bg="#141414",
-                fg="#d4d4d4",
-                selectbackground="#264f78",
-                insertbackground="white",
+                fg="#d4d4d4"
             )
             self.script.tag_configure("gen", background="#404040", foreground="white")
             self.script.tag_configure("seek", background="#005bb5", foreground="white")
@@ -200,9 +266,7 @@ class VoiceReaderUI:
         else:
             self.script.config(
                 bg="white",
-                fg="black",
-                selectbackground="#63a1e0",
-                insertbackground="black",
+                fg="black"
             )
             self.script.tag_configure("gen", background="#DEDEDE", foreground="black")
             self.script.tag_configure("seek", background="#44a1ff", foreground="black")
@@ -287,9 +351,6 @@ class VoiceReaderUI:
         global stop_flag
         stop_flag = True
         self.stopRunnable(self)
-
-    def clear_script(self):
-        self.script.delete("1.0", "end")
 
     def set_speed(self, value):
         try:

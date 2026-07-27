@@ -7,9 +7,9 @@ import characters
 # KOKORO SETUP
 # ============================================================
 print("Loading Kokoro...")
-from kokoro import KPipeline
+# from kokoro import KPipeline
 
-pipeline = KPipeline(lang_code="a")
+# pipeline = KPipeline(lang_code="a")
 print("Kokoro loaded.\n\n")
 
 
