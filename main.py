@@ -71,7 +71,7 @@ def should_cancel_generation(my_gen_id):
 
 def generate(readerUI, scriptLines):
     global character_voices, buffer_char_size, gen_threads, latest_gen_id
-    cancel_generation(readerUI, max_iterations=3, delay=1) # We will wait up to 1 minute for generation to finish
+    cancel_generation(readerUI, max_iterations=10, delay=0.1) # We will wait up to 1 second for threads to drop to 0 first
 
     with gen_thread_lock:
         gen_threads += 1
@@ -83,13 +83,16 @@ def generate(readerUI, scriptLines):
         audio_queue.clear()
         character_voices = characters.load_characters(readerUI.dialog_mode)
         generation_stop.clear() #If we are starting a new generation, clear the stop flag
-        print("Generating audio... Generation threads:", gen_threads)
+        print(f"Generating audio; in thread {my_gen_id}... Generation threads:", gen_threads)
         set_audio_index(0)
 
-    readerUI.set_status("Buffering")
-    readerUI.log("Generating audio...")
-
     try:
+        if should_cancel_generation(my_gen_id):
+            return
+        
+        readerUI.set_status("Buffering")
+        readerUI.log("Generating audio...")
+
         for line in scriptLines:
             if should_cancel_generation(my_gen_id):
                 return
@@ -144,8 +147,8 @@ def generate(readerUI, scriptLines):
 # ============================
 
 def cancel_generation(readerUI, max_iterations=5, delay=1):
-    readerUI.log("Previous Generation hasn't finished yet...")
-    readerUI.set_status("Cancelling generation...")
+    if gen_threads > 0:
+        readerUI.set_status("Cancelling...")
     for i in range(0, max_iterations):
         if gen_threads > 0:
             generation_stop.set()
