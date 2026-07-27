@@ -332,6 +332,7 @@ class VoiceReaderUI:
             self.mode_dropdown.config(state="readonly")
 
     def log(self, text):
+        print(text)
         def update():
             self.output.config(state="normal")
             self.output.insert("end", text + "\n\n")
