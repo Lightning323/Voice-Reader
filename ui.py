@@ -99,7 +99,7 @@ class VoiceReaderUI:
 
         # Editor container
         editor_frame = ttk.Frame(screenplay_frame)
-        editor_frame.pack(fill="both", expand=True)
+        editor_frame.pack(fill="both", expand=True, padx=0, pady=0)
 
         # Search Bar =================================
         self.search_frame = ttk.Frame(editor_frame)
@@ -131,7 +131,7 @@ class VoiceReaderUI:
             wrap="word",
             undo=True,
             maxundo=-1,
-            padx=10,
+            padx=100,
             pady=10,
             spacing1=2,
             spacing3=4,
@@ -139,6 +139,17 @@ class VoiceReaderUI:
         )
         self.script.pack(side="left", fill="both", expand=True)
 
+        self.script.tag_configure(
+            "reader_margin",
+            lmargin1=20,
+            lmargin2=20,
+            rmargin=20
+        )
+        self.script.tag_configure("page_margin",
+            lmargin1=150,
+            lmargin2=150,
+            rmargin=150
+        )
         self.script.tag_configure("gen", background="#404040", foreground="white")
         self.script.tag_configure("seek", background="#005bb5", foreground="black")
         self.script.tag_configure("current", background="#b58900", foreground="black")
@@ -164,7 +175,7 @@ class VoiceReaderUI:
         # Right vertical splitter
         # ==========================================
         self.right_paned = ttk.Panedwindow(right_panel, orient=tk.VERTICAL)
-        self.right_paned.pack(fill="both", expand=True)
+        self.right_paned.pack(fill="both", expand=True, padx=10)
 
         # -----------------------------
         # Output log
@@ -281,9 +292,12 @@ class VoiceReaderUI:
             self.script.tag_add("seek", index, end)
             self.script.see(index)
 
-    def set_script_contents(self, text):
+    def set_script_contents(self, text, set_margin=True):
         self.script.delete("1.0", "end")
         self.script.insert("1.0", text)
+
+        if set_margin:
+            self.script.tag_add("page_margin", "1.0", "end")
 
     def get_script_contents(self):
         return self.script.get("1.0", "end-1c")
