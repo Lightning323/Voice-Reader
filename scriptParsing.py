@@ -200,57 +200,81 @@ nltk.download("punkt")
 nltk.download("punkt_tab")
 from nltk.tokenize import sent_tokenize
 
-def merge_lines(lines):
+def merge_lines_into_paragraphs(text):
+    lines = text.splitlines()
+
     paragraphs = []
     buffer = ""
+    start_line = None
+    current_line = 0
 
     for line in lines:
-        line = line.strip()
+        current_line += 1
+        stripped = line.strip()
 
-        if not line:
+        if not stripped:
             if buffer:
-                paragraphs.append(buffer)
+                paragraphs.append((buffer, start_line, current_line - 1))
                 buffer = ""
+                start_line = None
             continue
+
+        if start_line is None:
+            start_line = current_line
 
         # Keep numbered list items separate
-        if re.match(r"^\d+\s", line):
+        if re.match(r"^\d+\s", stripped):
             if buffer:
-                paragraphs.append(buffer)
+                paragraphs.append((buffer, start_line, current_line - 1))
                 buffer = ""
-            paragraphs.append(line)
+                start_line = current_line
+
+            paragraphs.append((stripped, current_line, current_line))
             continue
 
-        if not buffer:
-            buffer = line
+        if buffer:
+            buffer += " " + stripped
         else:
-            previous_ends_sentence = re.search(r"[.!?]['\"]?$", buffer)
-
-            # Likely a continuation
-            if not previous_ends_sentence or line[0].islower():
-                buffer += " " + line
-            else:
-                paragraphs.append(buffer)
-                buffer = line
+            buffer = stripped
 
     if buffer:
-        paragraphs.append(buffer)
+        paragraphs.append((buffer, start_line, current_line))
 
     return paragraphs
 
 
 
 def parse_text(text):
-    lines = merge_lines(text.splitlines())
+    paragraphs = merge_lines_into_paragraphs(text)
 
     script_lines = []
 
-    index = 1
+    for paragraph, paragraph_line_start, paragraph_line_end in paragraphs:
 
-    for paragraph in lines:
         sentences = sent_tokenize(paragraph)
 
+        search_position = 0
+        current_line = paragraph_line_start
+
         for sentence in sentences:
+
+            # Find sentence inside paragraph
+            sentence_start = paragraph.find(sentence, search_position)
+            sentence_end = sentence_start + len(sentence)
+
+            search_position = sentence_end
+
+            # Count newlines before sentence
+            sentence_line_start = (
+                paragraph_line_start +
+                paragraph[:sentence_start].count("\n")
+            )
+
+            sentence_line_end = (
+                paragraph_line_start +
+                paragraph[:sentence_end].count("\n")
+            )
+
             speed_multiplier = 1.0
             end_offset = calculate_end_offset(sentence, speed_multiplier)
 
@@ -261,11 +285,12 @@ def parse_text(text):
                 "NARRATOR",
                 speed_multiplier,
                 end_offset,
-                index,
-                index
+                sentence_line_start,
+                sentence_line_end,
+                0,
+                0
             )
 
             script_lines.append(script_line)
-            index += 1
 
     return script_lines
