@@ -22,14 +22,11 @@ Voice Reader supports two reading modes:
 # Installation
 
 1. Create a virtual environment
-
 ```bash
 python3 -m venv .venv
 ```
 
 2. Activate the environment
-
-
 ```bash
 # macOS / Linux
 source .venv/bin/activate
@@ -39,9 +36,13 @@ source .venv/bin/activate
 ```
 
 3. Install dependencies
-
 ```bash
 pip install -r requirements.txt
+```
+
+4. Run
+```bash
+python main.py
 ```
 
 
