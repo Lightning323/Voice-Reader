@@ -60,10 +60,6 @@ class VoiceReaderUI:
         ).pack(side="left", padx=5)
         self.speed_dial = ttk.Label(toolbar, text="1x").pack(side="left", padx=(10, 5))
 
-        ttk.Button(toolbar, text="Clear Text", command=self.clear_script).pack(
-            side="right", padx=5
-        )
-
         self.selected_mode = tk.StringVar(value="Dialog Mode")
         self.mode_dropdown = ttk.Combobox(
             toolbar,
@@ -374,9 +370,6 @@ class VoiceReaderUI:
         global stop_flag
         stop_flag = True
         self.stopRunnable(self)
-
-    def clear_script(self):
-        self.script.delete("1.0", "end")
 
     def set_speed(self, value):
         try:
