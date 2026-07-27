@@ -119,7 +119,7 @@ def playback_thread(readerUI):
             if len(audio_queue) < 100 and (
                 len(audio_queue) == 0 or audio_queue[-1] is not None
             ):
-                PLAY_AFTER_N_CHARACTERS = 300
+                PLAY_AFTER_N_CHARACTERS = 400
 
                 is_buffer_large_enough = False
                 buffer_char_size = 0  # calculate buffer char size
