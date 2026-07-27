@@ -143,14 +143,11 @@ def generate(readerUI, scriptLines):
 # BUTTON ACTIONS
 # ============================
 
-
-def cancel_generation(readerUI, max_iterations=5, delay=1, log=True):
+def cancel_generation(readerUI, max_iterations=5, delay=1):
+    readerUI.log("Previous Generation hasn't finished yet...")
+    readerUI.set_status("Cancelling generation...")
     for i in range(0, max_iterations):
         if gen_threads > 0:
-            if log:
-                print("Previous Generation hasn't finished yet... gen threads:", gen_threads)
-                readerUI.log("Previous Generation hasn't finished yet...")
-                readerUI.set_status("Cancelling generation...")
             generation_stop.set()
             time.sleep(delay)
         else:
@@ -164,7 +161,7 @@ def play(readerUI, text):
         should_generate = len(audio_queue) == 0 or (text != cached_text)
 
         if should_generate:  #Generate
-            cancel_generation(readerUI, max_iterations=30, delay=0.01, log=False)  # We block here and in the thread itself, but we dont want to wait too long here because it will block the UI
+            # cancel_generation(readerUI, max_iterations=30, delay=0.01, log=False)  # We block here and in the thread itself, but we dont want to wait too long here because it will block the UI
             print("Preparing to Generating... dialog mode:", readerUI.dialog_mode, "gen threads:", gen_threads)
 
             if(readerUI.dialog_mode):
