@@ -293,12 +293,14 @@ class VoiceReaderUI:
 
         self.root.after(0, fn)
 
+    """
+    start, end are the line markers
+    """
     def highlight_playback(self, start, end):
         def update():
             self.script.tag_remove("current", "1.0", "end")
             self.script.tag_add("current", start, end)
             self.script.see(start)
-
         self.ui(update)
 
     def highlight_gen(self, start, end):

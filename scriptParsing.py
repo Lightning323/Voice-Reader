@@ -6,7 +6,7 @@ def map_range(value, in_min, in_max, out_min, out_max):
 
 
 class ScriptLine:
-    def __init__(self, text, character, speed_multiplier, end_offset, start, end):
+    def __init__(self, text, character, speed_multiplier, end_offset, line_start, line_end, character_start=None, character_end=None):
         self.text = text.strip()
         self.character = character
 
@@ -16,11 +16,15 @@ class ScriptLine:
         self.speed_multiplier = speed_multiplier
 
         # Line start and end
-        self.start = start
-        self.end = end
+        self.start = line_start
+        self.end = line_end
 
-    def __str__(self):
-        return f'{self.character}: "{self.text}" (offset={self.end_offset}; x{self.speed_multiplier}) ({self.start}-{self.end})'
+        # Character start and end
+        self.character_start = character_start
+        self.character_end = character_end
+
+    def __repr__(self):
+        return f"ScriptLine({self.text}, {self.character}, {self.speed_multiplier}, {self.end_offset}, {self.start}.{self.character_start}, {self.end}.{self.character_end})"
 
 
 # ---------------------
@@ -168,23 +172,100 @@ def format_line(text, remove_parentheses=True):
 # ---------------------
 # MONOLOGE
 # ---------------------
+"""
+
+raw text
+
+    ↓
+merge wrapped lines into paragraphs
+
+If a line ends with sentence punctuation (., ?, !, : maybe), assume it might be complete.
+If the next line starts lowercase, it is almost certainly a continuation.
+If the current line does not end punctuation, merge it with the next line.
+Preserve numbered lists.
+
+
+    ↓
+split paragraphs into sentences
+
+    ↓
+create ScriptLine objects
+
+
+
+"""
+
+import nltk
+nltk.download("punkt")
+nltk.download("punkt_tab")
+from nltk.tokenize import sent_tokenize
+
+def merge_lines(lines):
+    paragraphs = []
+    buffer = ""
+
+    for line in lines:
+        line = line.strip()
+
+        if not line:
+            if buffer:
+                paragraphs.append(buffer)
+                buffer = ""
+            continue
+
+        # Keep numbered list items separate
+        if re.match(r"^\d+\s", line):
+            if buffer:
+                paragraphs.append(buffer)
+                buffer = ""
+            paragraphs.append(line)
+            continue
+
+        if not buffer:
+            buffer = line
+        else:
+            previous_ends_sentence = re.search(r"[.!?]['\"]?$", buffer)
+
+            # Likely a continuation
+            if not previous_ends_sentence or line[0].islower():
+                buffer += " " + line
+            else:
+                paragraphs.append(buffer)
+                buffer = line
+
+    if buffer:
+        paragraphs.append(buffer)
+
+    return paragraphs
+
 
 
 def parse_text(text):
-    lines = text.splitlines()
+    lines = merge_lines(text.splitlines())
+
     script_lines = []
-    for i, line in enumerate(lines):
-        line = line.strip()
-        if line:
 
-            speed_multiplier = 1.0  # calculate_speed_multiplier(line)
-            end_offset = calculate_end_offset(line, speed_multiplier)
+    index = 1
 
-            line = format_line(line)
+    for paragraph in lines:
+        sentences = sent_tokenize(paragraph)
+
+        for sentence in sentences:
+            speed_multiplier = 1.0
+            end_offset = calculate_end_offset(sentence, speed_multiplier)
+
+            sentence = format_line(sentence)
 
             script_line = ScriptLine(
-                line, "NARRATOR", speed_multiplier, end_offset, i + 1, i + 1
+                sentence,
+                "NARRATOR",
+                speed_multiplier,
+                end_offset,
+                index,
+                index
             )
 
             script_lines.append(script_line)
+            index += 1
+
     return script_lines
