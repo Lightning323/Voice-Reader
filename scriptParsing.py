@@ -49,16 +49,16 @@ SPEED_PATTERNS = [
     (1.75, ["fff-", "fff_", "(fff)"], 
      ["_fff_", "-fff-", "very very fast", "very very rapid", "very very frantic", "very very quick"]),
 
-    (1.45, ["ff-", "ff_", "(ff)"], 
+    (1.5, ["ff-", "ff_", "(ff)"], 
      ["_ff_", "-ff-", "very fast", "very rapid", "very frantic", "very quick"]),
 
-    (1.28, ["f-", "f_", "(f)"],
+    (1.32, ["f-", "f_", "(f)"],
      ["_f_", "-f-", "fast", "rapid", "frantic", "quick"]),
 
     (0.5, ["sss-", "sss_", "(sss)"],
      ["_sss_", "-sss-", "very very slow", "very very methodical", "very very thorough"]),
 
-    (0.53, ["ss-", "ss_", "(ss)"],
+    (0.6, ["ss-", "ss_", "(ss)"],
      ["_ss_", "-ss-", "very slow", "very methodical", "very thorough"]),
 
     (0.75, ["s-", "s_", "(s)"],

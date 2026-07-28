@@ -127,7 +127,7 @@ def playback_thread(readerUI):
             ):
                 play_after_n_chars = 75
                 if(readerUI.dialog_mode):
-                    play_after_n_chars = 200
+                    play_after_n_chars = 175
 
                 is_buffer_large_enough = False
                 buffer_char_size = 0  # calculate buffer char size
