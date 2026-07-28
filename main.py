@@ -80,7 +80,6 @@ def generate(readerUI, scriptLines):
         my_gen_id = latest_gen_id
 
         audio_queue.clear()
-        character_voices = characters.load_characters(readerUI.dialog_mode)
         generation_stop.clear() #If we are starting a new generation, clear the stop flag
         print(f"Generating audio; in thread {my_gen_id}... Generation threads:", gen_threads)
         set_audio_index(0)
@@ -165,6 +164,7 @@ def play(readerUI, text):
             # cancel_generation(readerUI, max_iterations=30, delay=0.01, log=False)  # We block here and in the thread itself, but we dont want to wait too long here because it will block the UI
             print("Preparing to Generating... dialog mode:", readerUI.dialog_mode, "gen threads:", gen_threads)
 
+            character_voices = characters.load_characters(readerUI.dialog_mode)
             if(readerUI.dialog_mode):
                 script_lines, new_text = scriptParsing.parse_script(text, character_voices)
                 print(len(script_lines), "dialog lines parsed.")

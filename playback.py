@@ -91,7 +91,12 @@ def stop_playback(readerUI):
 
 # SEEK =========================================================
 def seek(readerUI, seekVector):
-    global playback_index, audio_queue
+    global playback_index, audio_queue, playback_state_lock
+
+    # with playback_state_lock:
+    #     interrupt_audio()
+    #     start_playback(readerUI)
+
     readerUI.status.config(
         text="Skipping " + ("forward" if seekVector == 1 else "backward")
     )
@@ -121,7 +126,7 @@ def playback_thread(readerUI):
             ):
                 play_after_n_chars = 150
                 if(readerUI.dialog_mode):
-                    play_after_n_chars = 400
+                    play_after_n_chars = 300
 
                 is_buffer_large_enough = False
                 buffer_char_size = 0  # calculate buffer char size
