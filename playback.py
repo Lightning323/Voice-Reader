@@ -162,7 +162,10 @@ def playback_thread(readerUI):
                     readerUI.highlight_playback(
                         f"{sample.line.start}.0", f"{sample.line.end}.end"
                     )
-                    readerUI.log(f'{sample.line.character}: ({playback_index}) "{sample.line.text}"')
+                    speed_info = ""
+                    if sample.line.speed_multiplier != 1:
+                        speed_info = f"({sample.line.speed_multiplier:.2f}x)"
+                    readerUI.log(f'{sample.line.character}: {speed_info} "{sample.line.text}"')
                     readerUI.set_status(f"{sample.line.character}")
                 #print("Playing... ", playback_index, sample.line, sample.volume_multiplier)
                 interrupted = play_audio(
