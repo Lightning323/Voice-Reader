@@ -31,12 +31,20 @@ class ScriptLine:
 # DIOLOGUE PARSING
 # ---------------------
 
+default_speed_multiplier = 1.0
 
 def add_script_line(script_lines, speech, character, start, end):
+    global default_speed_multiplier
 
     speech = speech.strip()
-    speed_multiplier, speech = calculate_speed_multiplier(speech)
+    speed_multiplier, speech, was_notated = calculate_speed_multiplier(speech)
     end_offset = calculate_end_offset(speech, speed_multiplier)
+
+    if was_notated and character == "NARRATOR" and format_line(speech).strip() == "": #If the only thing on this line is a speed multiplier, set it as the default
+        default_speed_multiplier = speed_multiplier
+        print("Default speed multiplier set to", default_speed_multiplier)
+        return
+        
 
     speech = format_line(speech)
 
@@ -64,25 +72,26 @@ SPEED_PATTERNS = [
     (0.75, ["s-", "s_", "(s)"],
      ["_s_", "-s-", "slow", "methodical", "thorough"]),
 
+    (1.0, ["f-","f_","(f)"],
+     ["reset", "normal", "-r-","_r_"])
 ]
 
 def calculate_speed_multiplier(speech):
-    #preformat the text so we can better recognize patterns
-    formatted_text = " ".join(speech.replace(",", "").replace(".", "").split()).lower()
-
+    global default_speed_multiplier
     for multiplier, starts_with, words_in_parentheses in SPEED_PATTERNS:
         for prefix in starts_with:
             if speech.lower().strip().startswith(prefix):
-                return multiplier, speech[len(prefix):].lstrip()
+                return multiplier, speech[len(prefix):].lstrip(), True
 
-        if in_parentheses(formatted_text, words_in_parentheses):
-            return multiplier, speech
+        if in_parentheses(speech, words_in_parentheses):
+            return multiplier, speech, True
 
-    return 1.0, speech
+    return default_speed_multiplier, speech, False
 
 
 def in_parentheses(text, words):
-    notes = " ".join(re.findall(r"\((.*?)\)", text))
+    formatted_text = " ".join(text.replace(",", "").replace(".", "").split()).lower()
+    notes = " ".join(re.findall(r"\((.*?)\)", formatted_text))
     return any(word in notes for word in words)
 
 
@@ -114,6 +123,9 @@ def calculate_end_offset(speech, speed_multiplier):
 
 
 def parse_script(text, character_voices):
+    global default_speed_multiplier
+
+    default_speed_multiplier = 1.0
     script_lines = []
     # Get the lines
 
