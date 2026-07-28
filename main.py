@@ -109,11 +109,9 @@ def generate(readerUI, scriptLines):
             )
             volume_multiplier = character.volume_multiplier
 
-            if line.text.strip() == "":  # We still need to play silence
-                if should_cancel_generation(my_gen_id):
-                    return
-                audio_queue.append(AudioSample(None, line, volume_multiplier))
-            else: # Generate audio
+            audio_chunks = None
+
+            if line.text.strip() != "": # Generate audio
                 try:
                     audio_chunks = generate_audio(
                         my_gen_id,
@@ -121,12 +119,13 @@ def generate(readerUI, scriptLines):
                         voice=character.voice,
                         speed=speed,
                     )
-                    if should_cancel_generation(my_gen_id):
-                        return
-                    audio_queue.append(AudioSample(audio_chunks, line, volume_multiplier))
                 except Exception as e:
                     readerUI.log(f"ERROR! Could not generate audio for voice: {character.voice}")
                     print("Error generating audio:", e)
+
+            if should_cancel_generation(my_gen_id):
+                return
+            audio_queue.append(AudioSample(audio_chunks, line, volume_multiplier))
 
         if not should_cancel_generation(my_gen_id):
             audio_queue.append(None)

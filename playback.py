@@ -135,7 +135,7 @@ def playback_thread(readerUI):
                     readerUI.set_status(
                         f"Buffering {round(buffer_char_size / play_after_n_chars * 100)}%"
                     )
-                    time.sleep(0.1)
+                    time.sleep(0.5)
                     continue
 
             if allow_playback:

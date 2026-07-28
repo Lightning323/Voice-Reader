@@ -237,7 +237,7 @@ class CharacterEditor(ttk.Frame):
         
         character = self.characters[self.selected_character]
         character.voice = self.voice_entry.get()
-        character.speed_multiplier = utils.normalize_float(self.speed_entry.get(), 0.1, 100.0)
+        character.speed_multiplier = utils.normalize_float(self.speed_entry.get(), 0.5, 10.0)
         character.volume_multiplier = utils.normalize_float(self.volume_entry.get(), 0.0, 1.0)
         save_characters(self.characters, self.dialog_mode)
 
