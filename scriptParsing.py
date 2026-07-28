@@ -54,10 +54,10 @@ def add_script_line(script_lines, speech, character, start, end):
 
 
 SPEED_PATTERNS = [
-    (1.75, ["fff-", "fff_", "(fff)"], 
+    (1.6, ["fff-", "fff_", "(fff)"], 
      ["_fff_", "-fff-", "very very fast", "very very rapid", "very very frantic", "very very quick"]),
 
-    (1.5, ["ff-", "ff_", "(ff)"], 
+    (1.45, ["ff-", "ff_", "(ff)"], 
      ["_ff_", "-ff-", "very fast", "very rapid", "very frantic", "very quick"]),
 
     (1.32, ["f-", "f_", "(f)"],
