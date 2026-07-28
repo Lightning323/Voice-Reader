@@ -189,7 +189,8 @@ def play_audio(audio_chunks, volume_multiplier, end_offset):
     global current_channel
 
     if audio_chunks is None:  # Still play a pause
-        return delay_unless_interrupted(None, (max(1, 1 + end_offset)))
+        if delay_unless_interrupted(None, (max(1, 1 + end_offset))):
+            return True
     else:
         for i, audio in enumerate(audio_chunks):
             audio = audio.detach().cpu().numpy().flatten()
@@ -200,16 +201,22 @@ def play_audio(audio_chunks, volume_multiplier, end_offset):
             sound.set_volume(max(0.0, min(1.0, volume_multiplier)))
             duration = sound.get_length()
 
+            # print(f"Sound {i} duration: {duration}")
             current_channel = sound.play()
             if i < len(audio_chunks) - 1:
-                return delay_unless_interrupted(current_channel, duration)
-            else:  # ... adjust time offset only at final wait.
-                # duration = get_non_silent_duration(audio)
-                return delay_unless_interrupted(
+                if delay_unless_interrupted(current_channel, duration):
+                    return True
+            else: 
+                if delay_unless_interrupted(
                     current_channel, max(0.01, duration + end_offset)
-                )
+                ):
+                    return True
 
+    return False
 
+"""
+Returns True if interrupted
+"""
 def delay_unless_interrupted(channel, duration):
     global playback_id
 
