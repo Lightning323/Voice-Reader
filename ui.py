@@ -146,9 +146,9 @@ class VoiceReaderUI:
             rmargin=20
         )
         self.script.tag_configure("page_margin",
-            lmargin1=150,
-            lmargin2=150,
-            rmargin=150
+            lmargin1=160,
+            lmargin2=160,
+            rmargin=160
         )
         self.script.tag_configure("gen", background="#404040", foreground="white")
         self.script.tag_configure("seek", background="#005bb5", foreground="black")

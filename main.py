@@ -159,11 +159,11 @@ def cancel_generation(readerUI, max_iterations=5, delay=1):
 def play(readerUI, text):
     global gen_thread, character_voices, cached_text, generation_lock, gen_threads
 
-    with generation_lock:
-        #only generate if text has changed or audio queue is empty
-        should_generate = len(audio_queue) == 0 or (text != cached_text)
+    #only generate if text has changed or audio queue is empty
+    should_generate = len(audio_queue) == 0 or (text != cached_text)
 
-        if should_generate:  #Generate
+    if should_generate:
+        with generation_lock:
             # cancel_generation(readerUI, max_iterations=30, delay=0.01, log=False)  # We block here and in the thread itself, but we dont want to wait too long here because it will block the UI
             print("Preparing to Generating... dialog mode:", readerUI.dialog_mode, "gen threads:", gen_threads)
 
@@ -182,7 +182,8 @@ def play(readerUI, text):
                 target=generate, args=(readerUI, script_lines), daemon=True
             )
             gen_thread.start()
-            start_playback(readerUI)
+            
+    start_playback(readerUI)
 
 
 def change_mode(readerUI, dialog_mode):
