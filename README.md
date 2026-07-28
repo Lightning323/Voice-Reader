@@ -1,4 +1,4 @@
-![Voice Reader](icon/icon.png)
+<img src="icon/icon.png" alt="Voice Reader Icon" style="max-width: 200px;"></img>
 
 # 🎙️ Voice Reader
 Voice Reader is a Python-based UI application for reading screenplays and written content aloud using text-to-speech powered by [Kokoro](https://github.com/hexgrad/kokoro). 
