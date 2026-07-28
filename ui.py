@@ -248,7 +248,7 @@ class VoiceReaderUI:
 
             # Character editor takes up the remaining space
             right_height = self.right_paned.winfo_height()
-            self.right_paned.sashpos(0, 0)
+            self.right_paned.sashpos(0, 100) #Set 2nd parameter to any finite value to scale the output log, or set to 0 to hide it
 
         self.root.after(10, init_layout)
 
