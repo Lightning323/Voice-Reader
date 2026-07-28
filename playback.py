@@ -8,6 +8,7 @@ pygame.mixer.init(frequency=24000, size=-16, channels=1)
 
 current_channel = None
 playback_index = 0
+playing_index = 0
 audio_queue = []
 
 # For the generator
@@ -59,10 +60,10 @@ def start_playback(readerUI):
 
 # PAUSE =========================================================
 def pause_playback(readerUI):
-    global playback_index, playback_state_lock, allow_playback
+    global playback_index, playback_state_lock, allow_playback, playing_index
 
     with playback_state_lock:
-        if allow_playback:  # If not pausing, than seek back
+        if allow_playback and playing_index == playback_index:  # If not pausing, than seek back
             playback_index = clamp(playback_index - 1, 0, len(audio_queue) - 1)
         play_event.clear()
         allow_playback = False
@@ -110,7 +111,7 @@ def seek(readerUI, seekVector):
 
 
 def playback_thread(readerUI):
-    global play_event, shutdown_event, audio_queue, playback_index, playback_state_lock, allow_playback
+    global play_event, shutdown_event, audio_queue, playback_index, playback_state_lock, allow_playback, playing_index
 
     while not shutdown_event.is_set():
         try:
@@ -168,6 +169,7 @@ def playback_thread(readerUI):
                     readerUI.log(f'{sample.line.character}: {speed_info}"{sample.line.text}"')
                     readerUI.set_status(f"{sample.line.character}")
                 #print("Playing... ", playback_index, sample.line, sample.volume_multiplier)
+                playing_index = playback_index
                 interrupted = play_audio(
                     sample.audio,
                     volume_multiplier=sample.volume_multiplier,
