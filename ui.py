@@ -62,14 +62,15 @@ class VoiceReaderUI:
         ).pack(side="left", padx=5)
         self.speed_dial = ttk.Label(toolbar, text="1x").pack(side="left", padx=(10, 5))
 
-        self.selected_mode = tk.StringVar(value="Dialog Mode")
+        self.selected_mode = tk.StringVar(value="Reader Mode")
+        self.dialog_mode = False
+
         self.mode_dropdown = ttk.Combobox(
             toolbar,
             textvariable=self.selected_mode,
             values=["Dialog Mode", "Reader Mode"],
             state="readonly",  # Prevents typing custom values
         )
-        self.dialog_mode = True
         self.mode_dropdown.pack(pady=20, side="right")
         self.mode_dropdown.bind("<<ComboboxSelected>>", self.change_mode)
         self.playback_mode(False)
@@ -214,6 +215,7 @@ class VoiceReaderUI:
         self._last_dark = darkdetect.isDark()
         self.root.after(1000, self.check_theme)
         self.apply_theme(darkdetect.isDark())
+        self.change_mode()
         # ==========================================
         # Initial splitter positions
         # ==========================================
@@ -366,7 +368,7 @@ class VoiceReaderUI:
     # CONTROLS
     # ========================================================
 
-    def change_mode(self, event):
+    def change_mode(self, event=None):
         self.dialog_mode = self.mode_dropdown.get() == "Dialog Mode"
         self.character_editor.set_dialog_mode(self.dialog_mode)
         self.modeChangeRunnable(self, self.dialog_mode)
