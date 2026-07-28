@@ -159,7 +159,7 @@ def playback_thread(readerUI):
                     )
                     readerUI.log(f'{sample.line.character}: ({playback_index}) "{sample.line.text}"')
                     readerUI.set_status(f"{sample.line.character}")
-                print("Playing... ", playback_index, sample.line, sample.volume_multiplier)
+                #print("Playing... ", playback_index, sample.line, sample.volume_multiplier)
                 interrupted = play_audio(
                     sample.audio,
                     volume_multiplier=sample.volume_multiplier,
