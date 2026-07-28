@@ -1,6 +1,6 @@
 import tkinter as tk
 import ttkbootstrap as ttk
-
+import os
 import darkdetect
 
 from character_editor import CharacterEditor
@@ -28,6 +28,10 @@ class VoiceReaderUI:
         self.root = ttk.Window()
         self.root.title("Voice Reader")
         self.root.geometry("1200x750")
+        # icon_path = os.path.join(os.path.dirname(__file__), "icon", "icon.png")
+        # print("icon path:", icon_path)
+        icon = tk.PhotoImage(file="icon/icon.png")
+        self.root.iconphoto(True, icon)
 
         # -----------------------------
         # Toolbar

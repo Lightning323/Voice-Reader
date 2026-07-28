@@ -1,6 +1,7 @@
-# 🎙️ Voice Reader
+![Voice Reader](icon/icon.png)
 
-A Python-based UI application for reading screenplays and written content aloud using text-to-speech powered by [Kokoro](https://github.com/hexgrad/kokoro).
+# 🎙️ Voice Reader
+Voice Reader is a Python-based UI application for reading screenplays and written content aloud using text-to-speech powered by [Kokoro](https://github.com/hexgrad/kokoro). 
 
 Voice Reader supports two reading modes:
 
@@ -119,3 +120,7 @@ Voice Reader uses Kokoro voices. Available voices are grouped by language and ge
 | `bm_fable` | Dramatic and theatrical |
 | `bm_george` | Relaxed and conversational |
 | `bm_lewis` | Younger and approachable |
+
+
+# Credit
+(Icon by <a href="https://www.flaticon.com/free-icons/audio" ttle="audio icons"> Magnific </a>)

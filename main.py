@@ -10,7 +10,6 @@ from multiprocessing import Process
 # ============================================================
 print("Loading Kokoro...")
 from kokoro import KPipeline
-
 pipeline = KPipeline(lang_code="a")
 print("Kokoro loaded.\n\n")
 
