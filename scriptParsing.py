@@ -68,11 +68,11 @@ SPEED_PATTERNS = [
 
 def calculate_speed_multiplier(speech):
     #preformat the text so we can better recognize patterns
-    formatted_text = " ".join(speech.replace(",", "").replace(".", "").split())
+    formatted_text = " ".join(speech.replace(",", "").replace(".", "").split()).lower()
 
     for multiplier, starts_with, words_in_parentheses in SPEED_PATTERNS:
         for prefix in starts_with:
-            if speech.startswith(prefix):
+            if speech.lower().strip().startswith(prefix):
                 return multiplier, speech[len(prefix):].lstrip()
 
         if in_parentheses(formatted_text, words_in_parentheses):
