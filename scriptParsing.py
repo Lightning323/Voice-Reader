@@ -6,7 +6,17 @@ def map_range(value, in_min, in_max, out_min, out_max):
 
 
 class ScriptLine:
-    def __init__(self, text, character, speed_multiplier, end_offset, line_start, line_end, character_start=None, character_end=None):
+    def __init__(
+        self,
+        text,
+        character,
+        speed_multiplier,
+        end_offset,
+        line_start,
+        line_end,
+        character_start=None,
+        character_end=None,
+    ):
         self.text = text.strip()
         self.character = character
 
@@ -33,6 +43,7 @@ class ScriptLine:
 
 default_speed_multiplier = 1.0
 
+
 def add_script_line(script_lines, speech, character, start, end):
     global default_speed_multiplier
 
@@ -40,48 +51,77 @@ def add_script_line(script_lines, speech, character, start, end):
     speed_multiplier, speech, was_notated = calculate_speed_multiplier(speech)
     end_offset = calculate_end_offset(speech, speed_multiplier)
 
-    if was_notated and character == "NARRATOR" and format_line(speech).strip() == "": #If the only thing on this line is a speed multiplier, set it as the default
+    if (
+        was_notated and character == "NARRATOR" and format_line(speech).strip() == ""
+    ):  # If the only thing on this line is a speed multiplier, set it as the default
         default_speed_multiplier = speed_multiplier
         print("Default speed multiplier set to", default_speed_multiplier)
         return
-        
 
     speech = format_line(speech)
 
+    #The narrator can't have a default speed multiplier
+    if not was_notated and character == "NARRATOR":
+        speed_multiplier = 1
+
     script_lines.append(
-        ScriptLine(speech, character, speed_multiplier, end_offset, start, end)
+        ScriptLine(
+            speech,
+            character,
+            speed_multiplier,
+            end_offset,
+            start,
+            end,
+        )
     )
 
 
 SPEED_PATTERNS = [
-    (1.6, ["fff-", "fff_", "(fff)"], 
-     ["_fff_", "-fff-", "very very fast", "very very rapid", "very very frantic", "very very quick"]),
-
-    (1.45, ["ff-", "ff_", "(ff)"], 
-     ["_ff_", "-ff-", "very fast", "very rapid", "very frantic", "very quick"]),
-
-    (1.32, ["f-", "f_", "(f)"],
-     ["_f_", "-f-", "fast", "rapid", "frantic", "quick"]),
-
-    (0.5, ["sss-", "sss_", "(sss)"],
-     ["_sss_", "-sss-", "very very slow", "very very methodical", "very very thorough"]),
-
-    (0.6, ["ss-", "ss_", "(ss)"],
-     ["_ss_", "-ss-", "very slow", "very methodical", "very thorough"]),
-
-    (0.75, ["s-", "s_", "(s)"],
-     ["_s_", "-s-", "slow", "methodical", "thorough"]),
-
-    (1.0, ["f-","f_","(f)"],
-     ["reset", "normal", "-r-","_r_"])
+    (
+        1.6,
+        ["fff-", "fff_", "(fff)"],
+        [
+            "_fff_",
+            "-fff-",
+            "very very fast",
+            "very very rapid",
+            "very very frantic",
+            "very very quick",
+        ],
+    ),
+    (
+        1.45,
+        ["ff-", "ff_", "(ff)"],
+        ["_ff_", "-ff-", "very fast", "very rapid", "very frantic", "very quick"],
+    ),
+    (1.32, ["f-", "f_", "(f)"], ["_f_", "-f-", "fast", "rapid", "frantic", "quick"]),
+    (
+        0.5,
+        ["sss-", "sss_", "(sss)"],
+        [
+            "_sss_",
+            "-sss-",
+            "very very slow",
+            "very very methodical",
+            "very very thorough",
+        ],
+    ),
+    (
+        0.6,
+        ["ss-", "ss_", "(ss)"],
+        ["_ss_", "-ss-", "very slow", "very methodical", "very thorough"],
+    ),
+    (0.75, ["s-", "s_", "(s)"], ["_s_", "-s-", "slow", "methodical", "thorough"]),
+    (1.0, ["f-", "f_", "(f)"], ["reset", "normal", "-r-", "_r_"]),
 ]
+
 
 def calculate_speed_multiplier(speech):
     global default_speed_multiplier
     for multiplier, starts_with, words_in_parentheses in SPEED_PATTERNS:
         for prefix in starts_with:
             if speech.lower().strip().startswith(prefix):
-                return multiplier, speech[len(prefix):].lstrip(), True
+                return multiplier, speech[len(prefix) :].lstrip(), True
 
         if in_parentheses(speech, words_in_parentheses):
             return multiplier, speech, True
@@ -93,7 +133,6 @@ def in_parentheses(text, words):
     formatted_text = " ".join(text.replace(",", "").replace(".", "").split()).lower()
     notes = " ".join(re.findall(r"\((.*?)\)", formatted_text))
     return any(word in notes for word in words)
-
 
 
 def calculate_end_offset(speech, speed_multiplier):
@@ -162,9 +201,6 @@ def parse_script(text, character_voices):
     return script_lines, text
 
 
-
-
-
 def format_line(text, remove_parentheses=True):
     text = text.replace("…", "...").replace(". . .", "...").replace("—", "-")
 
@@ -208,9 +244,11 @@ create ScriptLine objects
 """
 
 import nltk
+
 nltk.download("punkt")
 nltk.download("punkt_tab")
 from nltk.tokenize import sent_tokenize
+
 
 def merge_lines_into_paragraphs(text):
     lines = text.splitlines()
@@ -255,7 +293,6 @@ def merge_lines_into_paragraphs(text):
     return paragraphs
 
 
-
 def parse_text(text):
     paragraphs = merge_lines_into_paragraphs(text)
 
@@ -268,7 +305,7 @@ def parse_text(text):
 
         for sentence in sentences:
             new_text.append(sentence)
-            
+
             speed_multiplier = 1.0
             end_offset = calculate_end_offset(sentence, speed_multiplier)
 
@@ -284,7 +321,7 @@ def parse_text(text):
                 line_start,
                 line_start,
                 0,
-                0
+                0,
             )
             script_lines.append(script_line)
         new_text.append("")
