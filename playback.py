@@ -122,10 +122,10 @@ def playback_thread(readerUI):
                 continue
 
             # If the buffer is incomplete and there are less than N samples
-            if len(audio_queue) < 100 and (
+            if len(audio_queue) < 50 and (
                 len(audio_queue) == 0 or audio_queue[-1] is not None
             ):
-                play_after_n_chars = 100
+                play_after_n_chars = 50
                 if(readerUI.dialog_mode):
                     play_after_n_chars = 200
 
