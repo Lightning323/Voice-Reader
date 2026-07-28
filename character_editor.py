@@ -54,7 +54,7 @@ class CharacterEditor(ttk.Frame):
         # ==================================================
 
         self.menu_label = ttk.Label(self, text="Characters", font=("", 10, "bold"))
-        self.menu_label.grid(row=0, column=0, sticky="w", padx=5, pady=(5, 2))
+        self.menu_label.grid(row=0, column=0, sticky="w", padx=5, pady=(10, 15))
 
         # Frame gives the listbox a minimum height
         list_frame = ttk.Frame(self, height=200)
@@ -100,7 +100,7 @@ class CharacterEditor(ttk.Frame):
         # ==================================================
 
         properties = ttk.LabelFrame(self, text="Properties")
-        properties.grid(row=3, column=0, sticky="nsew", padx=5, pady=(0, 5))
+        properties.grid(row=3, column=0, sticky="nsew", padx=5, pady=(5, 10))
 
         properties.columnconfigure(1, weight=1)
         properties.rowconfigure(0, weight=1)
@@ -115,7 +115,7 @@ class CharacterEditor(ttk.Frame):
 
         # Voice
         ttk.Label(properties, text="Voice").grid(
-            row=1, column=0, sticky="w", padx=5, pady=3
+            row=1, column=0, sticky="w", padx=5, pady=5
         )
 
         
@@ -124,23 +124,23 @@ class CharacterEditor(ttk.Frame):
             properties, state="readonly", values=voice_options
         )
 
-        self.voice_entry.grid(row=1, column=1, sticky="ew", padx=5, pady=3)
+        self.voice_entry.grid(row=1, column=1, sticky="ew", padx=5, pady=5)
 
         # Speed
         ttk.Label(properties, text="Speed").grid(
-            row=2, column=0, sticky="w", padx=5, pady=3
+            row=2, column=0, sticky="w", padx=5, pady=5
         )
 
         self.speed_entry = ttk.Entry(properties)
-        self.speed_entry.grid(row=2, column=1, sticky="ew", padx=5, pady=3)
+        self.speed_entry.grid(row=2, column=1, sticky="ew", padx=5, pady=5)
 
         # Volume
         ttk.Label(properties, text="Volume").grid(
-            row=3, column=0, sticky="w", padx=5, pady=3
+            row=3, column=0, sticky="w", padx=5, pady=5
         )
 
         self.volume_entry = ttk.Entry(properties)
-        self.volume_entry.grid(row=3, column=1, sticky="ew", padx=5, pady=3)
+        self.volume_entry.grid(row=3, column=1, sticky="ew", padx=5, pady=5)
 
         self.set_dialog_mode(self.dialog_mode)
 
@@ -166,8 +166,8 @@ class CharacterEditor(ttk.Frame):
             self.menu_label.config(text="Character Voices")
             self.button_frame.grid(row=2, column=0, sticky="ew", padx=5, pady=(0, 8))
             self.name_entry.config(state="normal")
-            self.name_label.grid(row=0, column=0, sticky="w", padx=5, pady=3)
-            self.name_entry.grid(row=0, column=1, sticky="ew", padx=5, pady=3)
+            self.name_label.grid(row=0, column=0, sticky="w", padx=5, pady=5)
+            self.name_entry.grid(row=0, column=1, sticky="ew", padx=5, pady=5)
         else:
             self.menu_label.config(text="Reader Voice")
             self.button_frame.grid_forget()
