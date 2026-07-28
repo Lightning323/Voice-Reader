@@ -119,19 +119,21 @@ def playback_thread(readerUI):
             if len(audio_queue) < 100 and (
                 len(audio_queue) == 0 or audio_queue[-1] is not None
             ):
-                PLAY_AFTER_N_CHARACTERS = 400
+                play_after_n_chars = 200
+                if(readerUI.dialog_mode):
+                    play_after_n_chars = 400
 
                 is_buffer_large_enough = False
                 buffer_char_size = 0  # calculate buffer char size
                 for sample in audio_queue:
                     buffer_char_size += len(sample.line.text)
-                    if buffer_char_size > PLAY_AFTER_N_CHARACTERS:
+                    if buffer_char_size > play_after_n_chars:
                         is_buffer_large_enough = True
                         break
 
                 if not is_buffer_large_enough:
                     readerUI.set_status(
-                        f"Buffering {round(buffer_char_size / PLAY_AFTER_N_CHARACTERS * 100)}%"
+                        f"Buffering {round(buffer_char_size / play_after_n_chars * 100)}%"
                     )
                     time.sleep(0.1)
                     continue
