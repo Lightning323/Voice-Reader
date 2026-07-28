@@ -2,7 +2,6 @@ import tkinter as tk
 import ttkbootstrap as ttk
 import os
 import darkdetect
-
 from character_editor import CharacterEditor
 
 stop_flag = False
@@ -19,6 +18,7 @@ class VoiceReaderUI:
         seekRunnable=None,
         modeChangeRunnable=None,
     ):
+        self.advanced_mode = not os.path.exists("simple-mode.txt")
         self.playRunnable = playRunnable
         self.stopRunnable = stopRunnable
         self.pauseRunnable = pauseRunnable
@@ -78,7 +78,6 @@ class VoiceReaderUI:
         self.status = ttk.Label(toolbar, text="Idle")
 
         self.status.pack(side="right", padx=10)
-
         # -----------------------------
         # Main area
         # -----------------------------
@@ -176,20 +175,40 @@ class VoiceReaderUI:
         self.script.bind(
             "<Control-Button-5>", lambda e: self.change_font_size(None, -1)
         )
+
+        # -----------------------------
+        # IMPORT Dialog
+        # -----------------------------
+        self.import_frame = ttk.Frame(right_panel, height=80)
+        self.import_frame.pack_propagate(False)   # Don't let children change the height
+        self.import_frame.grid_propagate(False)   # (Optional, harmless if you only use pack)
+
+        ttk.Label(
+            self.import_frame,
+            text="Import Text",
+            font=("", 10, "bold"),
+        ).pack(side="top", anchor="w", padx=5, pady=(0, 8))
+        ttk.Button(
+            self.import_frame,
+            text="Paste All",
+            command=self.clear_and_paste,
+        ).pack(fill="x", padx=5, pady=5)
+        self.import_frame.pack(fill="both", expand=False, padx=10)
+
         # ==========================================
         # Right vertical splitter
         # ==========================================
         self.right_paned = ttk.Panedwindow(right_panel, orient=tk.VERTICAL)
         self.right_paned.pack(fill="both", expand=True, padx=10)
-
         # -----------------------------
         # Output log
         # -----------------------------
 
+        
         output_frame = ttk.Frame(self.right_paned)
 
         self.log_label = ttk.Label(
-            output_frame, text="Information", font=("", 10, "bold")
+            output_frame, text="Log", font=("", 10, "bold")
         )
         self.log_label.pack(side="top", anchor="w", padx=5, pady=(0, 8))
         self.output = tk.Text(
@@ -197,7 +216,6 @@ class VoiceReaderUI:
             state="disabled",
             font=("Consolas", 11),
         )
-
         self.output.pack(fill="both", expand=True)
 
         # -----------------------------
@@ -209,7 +227,8 @@ class VoiceReaderUI:
         self.character_editor = CharacterEditor(character_frame)
         self.character_editor.pack(fill="both", expand=True)
 
-        self.right_paned.add(output_frame, weight=1)
+        # if(self.advanced_mode):
+        self.right_paned.add(output_frame, weight=0)
         self.right_paned.add(character_frame, weight=1)
 
         self._last_dark = darkdetect.isDark()
@@ -227,9 +246,9 @@ class VoiceReaderUI:
             window_width = self.root.winfo_width()
             self.main_paned.sashpos(0, window_width - 340)
 
-            # Character editor starts at ~300px tall
+            # Character editor takes up the remaining space
             right_height = self.right_paned.winfo_height()
-            self.right_paned.sashpos(0, max(150, right_height - 400))
+            self.right_paned.sashpos(0, 0)
 
         self.root.after(10, init_layout)
 
@@ -401,6 +420,14 @@ class VoiceReaderUI:
             self.speed_dial.config(text=f"{num_val:.2f}x")
         except ValueError:
             self.speed_dial.config(text=f"{value}x")
+
+    # ========================================================
+    # TEXT IMPORT
+    # ========================================================
+
+    def clear_and_paste(self):
+        self.script.delete("1.0", "end")
+        self.script.insert("1.0", self.script.clipboard_get())
 
     # ========================================================
     # PARSER
