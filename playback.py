@@ -125,7 +125,7 @@ def playback_thread(readerUI):
             if len(audio_queue) < 50 and (
                 len(audio_queue) == 0 or audio_queue[-1] is not None
             ):
-                play_after_n_chars = 50
+                play_after_n_chars = 75
                 if(readerUI.dialog_mode):
                     play_after_n_chars = 200
 
