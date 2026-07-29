@@ -173,7 +173,7 @@ def playback_thread(readerUI):
                 interrupted = play_audio(
                     sample.audio,
                     volume_multiplier=sample.volume_multiplier,
-                    end_offset=sample.line.end_offset,
+                    end_offset=sample.end_offset,
                 )
                 if interrupted:  # Pause it ourself
                     print("Interrupted")

@@ -49,7 +49,7 @@ def add_script_line(script_lines, speech, character, start, end):
 
     speech = speech.strip()
     speed_multiplier, speech, was_notated = calculate_speed_multiplier(speech)
-    end_offset = calculate_end_offset(speech, speed_multiplier)
+    end_offset = calculate_end_offset(speech)
 
     if (
         was_notated and character == "NARRATOR" and format_line(speech).strip() == ""
@@ -60,7 +60,7 @@ def add_script_line(script_lines, speech, character, start, end):
 
     speech = format_line(speech)
 
-    #The narrator can't have a default speed multiplier
+    # The narrator can't have a default speed multiplier
     if not was_notated and character == "NARRATOR":
         speed_multiplier = 1
 
@@ -135,7 +135,7 @@ def in_parentheses(text, words):
     return any(word in notes for word in words)
 
 
-def calculate_end_offset(speech, speed_multiplier):
+def calculate_end_offset(speech):
     # Interruption / pause adjustment
     speech = speech.replace("…", "...").replace(". . .", "...").replace("—", "-")
     space_removal = speech.replace(" ", "")
@@ -143,23 +143,18 @@ def calculate_end_offset(speech, speed_multiplier):
     trailing_dashes = len(space_removal) - len(space_removal.rstrip("-"))
 
     # More dots = longer pauses, more dashes = more abrupt interruptions
-    # We divide by speed_multiplier to account for the speed of spoken audio
-    #Interruptions
+    # Interruptions
     if trailing_dashes >= 1:
         end_offset = map_range(
             min(3, trailing_dashes),
             1,
             2,
-            -0.35 / speed_multiplier,
-            -1.0 / speed_multiplier,
+            -0.35,
+            -1.0,
         )
-    #Pauses
+    # Pauses
     elif trailing_dots >= 2:
-        end_offset = map_range(
-            min(6, trailing_dots), 2, 6, 
-            1 / speed_multiplier, 
-            5 / speed_multiplier
-        )
+        end_offset = map_range(min(6, trailing_dots), 2, 6, 1, 5)
     else:
         end_offset = 0
 
@@ -312,7 +307,7 @@ def parse_text(text):
             new_text.append(sentence)
 
             speed_multiplier = 1.0
-            end_offset = calculate_end_offset(sentence, speed_multiplier)
+            end_offset = calculate_end_offset(sentence)
 
             sentence = format_line(sentence)
 

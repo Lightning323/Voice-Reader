@@ -29,10 +29,11 @@ gen_thread = None
 
 
 class AudioSample:
-    def __init__(self, audio, line, volume_multiplier):
+    def __init__(self, audio, line, volume_multiplier, end_offset):
         self.audio = audio
         self.line = line
         self.volume_multiplier = volume_multiplier
+        self.end_offset = end_offset
 
 
 def clamp(value, min_value, max_value):
@@ -106,6 +107,7 @@ def generate(readerUI, scriptLines):
             speed = clamp(
                 speed * character.speed_multiplier * line.speed_multiplier, 0.05, 20
             )
+            end_offset = line.end_offset / speed
             volume_multiplier = character.volume_multiplier
 
             audio_chunks = None
@@ -124,7 +126,7 @@ def generate(readerUI, scriptLines):
 
             if should_cancel_generation(my_gen_id):
                 return
-            audio_queue.append(AudioSample(audio_chunks, line, volume_multiplier))
+            audio_queue.append(AudioSample(audio_chunks, line, volume_multiplier, end_offset))
 
         if not should_cancel_generation(my_gen_id):
             audio_queue.append(None)
