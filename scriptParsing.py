@@ -143,6 +143,8 @@ def calculate_end_offset(speech, speed_multiplier):
     trailing_dashes = len(space_removal) - len(space_removal.rstrip("-"))
 
     # More dots = longer pauses, more dashes = more abrupt interruptions
+    # We divide by speed_multiplier to account for the speed of spoken audio
+    #Interruptions
     if trailing_dashes >= 1:
         end_offset = map_range(
             min(3, trailing_dashes),
@@ -151,9 +153,12 @@ def calculate_end_offset(speech, speed_multiplier):
             -0.35 / speed_multiplier,
             -1.0 / speed_multiplier,
         )
+    #Pauses
     elif trailing_dots >= 2:
         end_offset = map_range(
-            min(6, trailing_dots), 2, 6, 1 / speed_multiplier, 5 / speed_multiplier
+            min(6, trailing_dots), 2, 6, 
+            1 / speed_multiplier, 
+            5 / speed_multiplier
         )
     else:
         end_offset = 0
