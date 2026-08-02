@@ -309,7 +309,7 @@ def parse_text(text):
             speed_multiplier = 1.0
             end_offset = calculate_end_offset(sentence)
 
-            sentence = format_line(sentence)
+            sentence = format_line(sentence,remove_parentheses=False)
 
             line_start = len(new_text)
 
