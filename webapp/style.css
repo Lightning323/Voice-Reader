@@ -634,7 +634,6 @@
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 6px;
-        height: min-content;
         padding: 7px 10px max(7px, env(safe-area-inset-bottom));
         border-top: 1px solid var(--border);
         background: var(--surface);
