@@ -13,6 +13,7 @@
     let state = {};
     let textTimer;
     let lastActiveRange = '';
+    let highlightRenderFrame;
     const remoteMode = ['http:', 'https:'].includes(window.location.protocol);
     let audioContext = null;
     let audioQueue = [];
@@ -102,6 +103,23 @@
       return { start, end };
     }
 
+    function syncHighlightMetrics() {
+      const style = window.getComputedStyle(script);
+      const properties = [
+        'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'fontVariant',
+        'lineHeight', 'letterSpacing', 'wordSpacing', 'textIndent',
+        'textTransform', 'tabSize', 'whiteSpace', 'overflowWrap', 'wordBreak',
+        'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+      ];
+
+      for (const property of properties) highlights.style[property] = style[property];
+
+      // A textarea's scrollbars reduce its text area. Measure the live content
+      // box so the highlight layer wraps at exactly the same character.
+      highlights.style.width = `${script.clientWidth}px`;
+      highlights.style.height = `${script.clientHeight}px`;
+    }
+
     function renderHighlights() {
       const ranges = [
         { ...offsetsForLines(state.generation_lines), type: 'generation', rank: 3 },
@@ -110,6 +128,7 @@
       ].filter((range) => Number.isFinite(range.start) && range.end > range.start)
         .sort((a, b) => a.start - b.start || a.rank - b.rank);
 
+      syncHighlightMetrics();
       let cursor = 0;
       let markup = '';
       for (const range of ranges) {
@@ -275,6 +294,17 @@
     });
     script.addEventListener('scroll', () => { highlights.scrollTop = script.scrollTop; highlights.scrollLeft = script.scrollLeft; });
     script.addEventListener('blur', () => bridge('set_text', script.value).catch(() => { }));
+
+    function scheduleHighlightRender() {
+      cancelAnimationFrame(highlightRenderFrame);
+      highlightRenderFrame = requestAnimationFrame(renderHighlights);
+    }
+
+    if (window.ResizeObserver) {
+      new ResizeObserver(scheduleHighlightRender).observe(script);
+    } else {
+      window.addEventListener('resize', scheduleHighlightRender);
+    }
 
     function syncReaderSettingsLayout() {
       toolbar.classList.remove('compact-settings');
