@@ -38,13 +38,13 @@
 
     :root[data-color-scheme="dark"] {
       color-scheme: dark;
-      --page: #101419;
-      --surface: #1a2129;
-      --surface-raised: #212b36;
-      --editor: #0f151c;
+      --page: #272727;
+      --surface: #2b2b2b;
+      --surface-raised: #212121;
+      --editor: #151515;
       --text: #edf2f7;
       --muted: #9baaba;
-      --border: #2c3743;
+      --border: #3c3c3c;
       --accent: #2589e6;
       --accent-hover: #4b9fff;
       --danger: #a33d49;
