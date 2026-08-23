@@ -166,7 +166,6 @@ class VoiceReaderUI:
         self._generation_lines: Optional[dict[str, int]] = None
         self._playing_lines: Optional[dict[str, int]] = None
         self._seek_lines: Optional[dict[str, int]] = None
-        self._logs: list[str] = []
         self._server_status = "Share this reader with trusted devices on your network."
         self._selected_character: Optional[str] = None
         self._characters = characters.load_characters(False)
@@ -210,7 +209,6 @@ class VoiceReaderUI:
                 "generation_lines": self._generation_lines,
                 "playing_lines": self._playing_lines,
                 "seek_lines": self._seek_lines,
-                "logs": list(self._logs),
                 "server": {
                     "running": server_running,
                     "port": server_port,
@@ -221,6 +219,8 @@ class VoiceReaderUI:
             }
 
     def _publish_state(self) -> None:
+        if self.web_server and self.web_server.is_running:
+            self.web_server.broadcast_ui_state()
         if not self._frontend_ready or self._closed or self._window is None:
             return
         # Keep the evaluated JavaScript valid even when the reader text
@@ -331,10 +331,6 @@ class VoiceReaderUI:
 
     def log(self, text: str) -> None:
         print(text)
-        with self._lock:
-            self._logs.append(str(text))
-            self._logs = self._logs[-200:]
-        self._publish_state()
 
     def set_status(self, text: str) -> None:
         with self._lock:
@@ -559,7 +555,7 @@ class VoiceReaderUI:
 
         self._patch_qt_permission_handler()
 
-        page = resource_path("webapp", "desktop.html")
+        page = resource_path("webapp", "index.html")
         self._window = webview.create_window(
             "Voice Reader",
             url=page.as_uri(),

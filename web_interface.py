@@ -176,17 +176,50 @@ class WebInterfaceServer:
         for listener in listeners:
             listener.put(message)
 
+    def broadcast_ui_state(self) -> None:
+        """Publish the complete shared UI state after a desktop-only change."""
+        self._broadcast("state", self.current_state())
+
     def update_state(self, **changes: str) -> None:
         with self._lock:
             for name, value in changes.items():
                 if hasattr(self._state, name):
                     setattr(self._state, name, value)
-            state = self._state.as_dict()
-        self._broadcast("state", state)
+        self._broadcast("state", self.current_state())
 
     def current_state(self) -> dict:
         with self._lock:
-            return self._state.as_dict()
+            playback_state = self._state.as_dict()
+
+        app = self._get_app()
+        if app is None:
+            return playback_state
+
+        try:
+            state = app.state()
+        except Exception:
+            return playback_state
+
+        # The playback state is server-owned, while the rest of the shared UI
+        # comes from the same controller used by the desktop window.
+        state.update(
+            {
+                "text": playback_state["text"],
+                "status": playback_state["status"],
+                "voice": playback_state["voice"],
+                "highlighted_text": playback_state["highlighted_text"],
+                "playing_lines": playback_state["highlighted_lines"],
+                "seek_lines": playback_state["seek_lines"],
+                "buffered_lines": playback_state["buffered_lines"],
+                "remote": True,
+            }
+        )
+        state["server"] = {
+            **state.get("server", {}),
+            "remote": True,
+            "message": "This shared session is managed by the desktop app.",
+        }
+        return state
 
     def begin_buffering(self, text: str) -> None:
         with self._lock:
@@ -196,8 +229,7 @@ class WebInterfaceServer:
             self._state.seek_lines = None
             self._state.voice = ""
             self._state.buffered_items.clear()
-            state = self._state.as_dict()
-        self._broadcast("state", state)
+        self._broadcast("state", self.current_state())
 
     def add_buffered_line(
         self, text: str, voice: str, start_line: int, end_line: int
@@ -213,8 +245,7 @@ class WebInterfaceServer:
                     "end_line": end_line,
                 }
             )
-            state = self._state.as_dict()
-        self._broadcast("state", state)
+        self._broadcast("state", self.current_state())
         return item_id
 
     def start_line(
@@ -237,8 +268,7 @@ class WebInterfaceServer:
             }
             self._state.seek_lines = None
             self._state.voice = voice
-            state = self._state.as_dict()
-        self._broadcast("state", state)
+        self._broadcast("state", self.current_state())
 
     def seek_line(self, start_line: int, end_line: int) -> None:
         """Show the line selected by the browser's seek controls."""
@@ -247,8 +277,7 @@ class WebInterfaceServer:
                 "start_line": start_line,
                 "end_line": end_line,
             }
-            state = self._state.as_dict()
-        self._broadcast("state", state)
+        self._broadcast("state", self.current_state())
 
     def clear_playback(self) -> None:
         self.interrupt_audio()
@@ -259,8 +288,7 @@ class WebInterfaceServer:
             self._state.voice = ""
             self._state.buffered_items.clear()
             self._audio.clear()
-            state = self._state.as_dict()
-        self._broadcast("state", state)
+        self._broadcast("state", self.current_state())
 
     def interrupt_audio(self) -> None:
         """Tell clients to immediately discard their current browser audio."""
@@ -384,6 +412,57 @@ class WebInterfaceServer:
         app.ui(apply_control)
         return True, "Command sent."
 
+    def schedule_ui_action(self, payload: dict) -> dict:
+        """Apply a non-playback action from the shared version of the UI."""
+        action = payload.get("action")
+        app = self._get_app()
+        if app is None:
+            return {"ok": False, "message": "The desktop reader is not ready."}
+
+        try:
+            if action == "set_text":
+                text = payload.get("text")
+                if not isinstance(text, str):
+                    raise ValueError("Text must be a string.")
+                app.set_script_contents(text)
+                self.update_state(text=text)
+                return {"ok": True}
+            if action == "set_speed":
+                app.set_speed(float(payload.get("value")))
+                return {"ok": True}
+            if action == "change_font_size":
+                app.change_font_size(int(payload.get("delta")))
+                return {"ok": True}
+            if action == "set_mode":
+                dialog_mode = payload.get("dialog_mode")
+                if not isinstance(dialog_mode, bool):
+                    raise ValueError("Mode is invalid.")
+                app.change_mode(dialog_mode)
+                return {"ok": True}
+            if action == "select_character":
+                return app.select_character(payload.get("name"))
+            if action == "add_character":
+                return app.add_character()
+            if action == "delete_character":
+                return app.delete_character(payload.get("name"))
+            if action == "rename_character":
+                return app.rename_character(payload.get("old_name"), payload.get("new_name"))
+            if action == "update_character":
+                return app.update_character(
+                    payload.get("name"),
+                    payload.get("voice"),
+                    payload.get("speed"),
+                    payload.get("volume"),
+                )
+            if action == "toggle_server":
+                return {
+                    "ok": False,
+                    "message": "Start or stop sharing from the desktop app.",
+                }
+            raise ValueError("Unknown UI action.")
+        except (TypeError, ValueError) as error:
+            return {"ok": False, "message": str(error)}
+
 
 class _WebRequestHandler(BaseHTTPRequestHandler):
     """HTTP handler; a per-server subclass supplies ``web_interface``."""
@@ -456,6 +535,28 @@ class _WebRequestHandler(BaseHTTPRequestHandler):
                 HTTPStatus.OK,
                 "application/json; charset=utf-8",
                 json.dumps({"ok": self.web_interface.complete_audio(audio_id)}).encode("utf-8"),
+            )
+            return
+        if self.path == "/api/ui":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if length > 5_000_000:
+                    raise ValueError("Request is too large.")
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                if not isinstance(payload, dict):
+                    raise ValueError("Request body must be an object.")
+            except (UnicodeDecodeError, ValueError, json.JSONDecodeError) as error:
+                self._send(
+                    HTTPStatus.BAD_REQUEST,
+                    "application/json; charset=utf-8",
+                    json.dumps({"ok": False, "message": str(error)}).encode("utf-8"),
+                )
+                return
+            result = self.web_interface.schedule_ui_action(payload)
+            self._send(
+                HTTPStatus.OK if result["ok"] else HTTPStatus.BAD_REQUEST,
+                "application/json; charset=utf-8",
+                json.dumps(result).encode("utf-8"),
             )
             return
         if self.path != "/api/control":
