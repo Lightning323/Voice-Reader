@@ -7,9 +7,9 @@
     const app = $('.app');
     const mobileLayout = window.matchMedia('(max-width: 900px)');
     const mobileTabs = [...document.querySelectorAll('.mobile-tab[data-mobile-view]')];
-    const mobileTextToolbar = $('#mobile-text-toolbar');
-    const mobileTextToolbarToggle = $('#mobile-text-toolbar-toggle');
-    const mobileTextToolbarContent = $('#mobile-text-toolbar-content');
+    const toolbar = $('.toolbar');
+    const readerSettings = $('#reader-settings');
+    const readerSettingsToggle = $('#reader-settings-toggle');
     let state = {};
     let textTimer;
     let lastActiveRange = '';
@@ -159,6 +159,7 @@
       $('#speed-value').textContent = `${Number(state.speed ?? .9).toFixed(2)}x`;
       $('#mode').value = state.dialog_mode ? 'dialog' : 'reader';
       $('#mode').disabled = Boolean(state.playback_mode);
+      updatePlayPause(Boolean(state.playback_mode));
       const size = state.font_size || 12;
       script.style.fontSize = `${size}px`; highlights.style.fontSize = `${size}px`;
       document.querySelectorAll('[data-font-size]').forEach((element) => { element.textContent = `${size}px`; });
@@ -166,9 +167,9 @@
       const remoteSession = Boolean(server.remote);
       $('#server-toggle .button-label').textContent = remoteSession ? 'Web' : (server.running ? 'Stop' : 'Start');
       
-      // if(remoteSession) {
-      //   $('#server-panel').hidden = true;
-      // }
+      if(remoteSession) {
+        $('#server-panel').hidden = true;
+      }
       
       $('#server-toggle').classList.toggle('danger', Boolean(server.running));
       $('#server-toggle').classList.toggle('primary', !server.running && !remoteSession);
@@ -179,6 +180,7 @@
       const url = $('#server-url'); url.textContent = server.url || ''; url.href = server.url || '#';
       renderCharacters();
       renderHighlights();
+      requestAnimationFrame(syncReaderSettingsLayout);
     }
 
     window.VoiceReaderDesktop = { applyState };
@@ -189,6 +191,17 @@
         const result = await bridge('control', action, script.value);
         if (!result.ok) notify(result.message || 'The command could not be completed.', true);
       } catch (error) { notify(error.message, true); }
+    }
+
+    function updatePlayPause(isPlaying) {
+      const button = $('#play-pause');
+      const label = isPlaying ? 'Pause' : 'Play';
+      const icon = button.querySelector('.ph');
+      icon.classList.toggle('ph-play', !isPlaying);
+      icon.classList.toggle('ph-pause', isPlaying);
+      button.querySelector('.button-label').textContent = label;
+      button.title = label;
+      button.setAttribute('aria-label', label);
     }
 
     async function unlockAudio() {
@@ -233,8 +246,7 @@
       }
     }
 
-    $('#play').addEventListener('click', () => control('play'));
-    $('#pause').addEventListener('click', () => control('pause'));
+    $('#play-pause').addEventListener('click', () => control(state.playback_mode ? 'pause' : 'play'));
     $('#back').addEventListener('click', () => control('back'));
     $('#forward').addEventListener('click', () => control('forward'));
     $('#stop').addEventListener('click', () => control('stop'));
@@ -251,10 +263,19 @@
     script.addEventListener('scroll', () => { highlights.scrollTop = script.scrollTop; highlights.scrollLeft = script.scrollLeft; });
     script.addEventListener('blur', () => bridge('set_text', script.value).catch(() => { }));
 
-    function setMobileTextToolbar(open) {
-      mobileTextToolbarToggle.setAttribute('aria-expanded', String(open));
-      mobileTextToolbarContent.hidden = !open;
-      mobileTextToolbar.classList.toggle('expanded', open);
+    function syncReaderSettingsLayout() {
+      toolbar.classList.remove('compact-settings');
+      if (readerSettings.hidden) return;
+      toolbar.classList.toggle('compact-settings', toolbar.scrollWidth > toolbar.clientWidth + 1);
+    }
+
+    function setReaderSettings(open) {
+      readerSettings.hidden = !open;
+      const action = open ? 'Hide' : 'Show';
+      readerSettingsToggle.setAttribute('aria-expanded', String(open));
+      readerSettingsToggle.setAttribute('aria-label', `${action} reading settings`);
+      readerSettingsToggle.title = `${action} reading settings`;
+      requestAnimationFrame(syncReaderSettingsLayout);
     }
 
     function setMobileView(view) {
@@ -265,19 +286,17 @@
         tab.setAttribute('aria-selected', String(selected));
         tab.tabIndex = selected ? 0 : -1;
       });
-      if (view !== 'read') setMobileTextToolbar(false);
     }
 
     function openSearch() {
-      if (mobileLayout.matches) setMobileView('controls');
-      search.classList.add('visible');
+      if (mobileLayout.matches) setMobileView('read');
+      setReaderSettings(true);
       requestAnimationFrame(() => $('#search-query').focus());
     }
     function closeSearch() {
-      search.classList.remove('visible');
+      $('#search-query').value = '';
       lastActiveRange = '';
       renderHighlights();
-      if (mobileLayout.matches) setMobileView('read');
       requestAnimationFrame(() => script.focus());
     }
     function findText() {
@@ -331,9 +350,7 @@
     $('#character-speed').addEventListener('change', saveCharacter);
     $('#character-volume').addEventListener('change', saveCharacter);
 
-    mobileTextToolbarToggle.addEventListener('click', () => {
-      setMobileTextToolbar(mobileTextToolbarContent.hidden);
-    });
+    readerSettingsToggle.addEventListener('click', () => setReaderSettings(readerSettings.hidden));
     mobileTabs.forEach((tab, index) => {
       tab.addEventListener('click', () => setMobileView(tab.dataset.mobileView));
       tab.addEventListener('keydown', (event) => {
@@ -344,11 +361,8 @@
         next.focus();
       });
     });
-    const syncMobileLayout = () => {
-      if (!mobileLayout.matches) setMobileTextToolbar(false);
-    };
-    if (mobileLayout.addEventListener) mobileLayout.addEventListener('change', syncMobileLayout);
-    else mobileLayout.addListener(syncMobileLayout);
+    window.addEventListener('resize', syncReaderSettingsLayout);
+    syncReaderSettingsLayout();
 
     const splitter = $('#splitter');
     splitter.addEventListener('pointerdown', (event) => {

@@ -19,39 +19,48 @@
   <div class="app" data-mobile-view="read">
     <header class="toolbar">
       <div class="controls" aria-label="Playback controls">
-        <button id="play" class="primary button-with-icon" title="Play"><i class="ph ph-play" aria-hidden="true"></i><span>Play</span></button>
-        <button id="pause" class="button-with-icon" title="Pause"><i class="ph ph-pause" aria-hidden="true"></i><span>Pause</span></button>
-        <button id="back" class="icon" title="Skip backward" aria-label="Skip backward"><i class="ph ph-skip-back" aria-hidden="true"></i></button>
-        <button id="forward" class="icon" title="Skip forward" aria-label="Skip forward"><i class="ph ph-skip-forward" aria-hidden="true"></i></button>
-        <button id="stop" class="danger button-with-icon" title="Stop"><i class="ph ph-stop" aria-hidden="true"></i><span>Stop</span></button>
+        <button id="play-pause" class="primary button-with-icon" title="Play" aria-label="Play"><i class="ph ph-play"
+            aria-hidden="true"></i><span class="button-label">Play</span></button>
+        <button id="back" class="icon" title="Skip backward" aria-label="Skip backward"><i class="ph ph-skip-back"
+            aria-hidden="true"></i></button>
+        <button id="forward" class="icon" title="Skip forward" aria-label="Skip forward"><i class="ph ph-skip-forward"
+            aria-hidden="true"></i></button>
+        <button id="stop" class="danger button-with-icon" title="Stop"><i class="ph ph-stop"
+            aria-hidden="true"></i><span>Stop</span></button>
+        <button id="reader-settings-toggle" class="icon" type="button" title="Hide reading settings"
+          aria-label="Hide reading settings" aria-expanded="true" aria-controls="reader-settings"><i
+            class="ph ph-sliders-horizontal" aria-hidden="true"></i></button>
       </div>
-      <div class="speed"><label for="speed">Speed</label><input id="speed" type="range" min="0.4" max="2.5" step="0.05"
-          value="0.9"><span id="speed-value">0.90x</span></div>
-      <div class="mode"><label for="mode">Mode</label><select id="mode">
-          <option value="reader">Reader Mode</option>
-          <option value="dialog">Dialog Mode</option>
-        </select></div>
-      <strong id="status" class="status" title="Idle">Idle</strong>
+      <div id="reader-settings" class="reader-settings">
+
+
+        <div class="font-controls">
+          <button class="icon" type="button" title="Decrease text size" aria-label="Decrease text size"
+            data-font-size-change="-1"><span class="icon-pair" aria-hidden="true"><i class="ph ph-text-aa"></i><i
+                class="ph ph-minus"></i></span></button>
+          <span class="font-size-value" data-font-size>12px</span><button class="icon" type="button"
+            title="Increase text size" aria-label="Increase text size" data-font-size-change="1"><span class="icon-pair"
+              aria-hidden="true"><i class="ph ph-text-aa"></i><i class="ph ph-plus"></i></span></button>
+        </div>
+        <div id="search" class="search">
+          <input id="search-query" type="search" placeholder="Find in text" aria-label="Find in text">
+          <button id="find" class="icon" type="button" title="Find" aria-label="Find"><i class="ph ph-magnifying-glass"
+              aria-hidden="true"></i></button>
+          <button id="close-search" class="icon" type="button" title="Clear find" aria-label="Clear find"><i
+              class="ph ph-x" aria-hidden="true"></i></button>
+        </div>
+
+
+
+      
+      </div>
+
+  <strong id="status" class="status" title="Idle">Idle</strong>
+
     </header>
 
     <main class="workspace">
       <section id="reader-view" class="reader" role="tabpanel" aria-labelledby="mobile-tab-read">
-        <div id="mobile-text-toolbar" class="mobile-text-toolbar">
-          <button id="mobile-text-toolbar-toggle" class="mobile-text-toolbar-toggle button-with-icon" type="button"
-            aria-expanded="false" aria-controls="mobile-text-toolbar-content">
-            <i class="ph ph-text-aa" aria-hidden="true"></i><span>Text options</span><i class="ph ph-caret-down"
-              aria-hidden="true"></i>
-          </button>
-          <div id="mobile-text-toolbar-content" class="mobile-text-toolbar-content" hidden>
-            <button class="icon" type="button" title="Decrease text size" aria-label="Decrease text size"
-              data-font-size-change="-1"><span class="icon-pair" aria-hidden="true"><i
-                  class="ph ph-text-aa"></i><i class="ph ph-minus"></i></span></button>
-            <span class="font-size-value" data-font-size>12px</span>
-            <button class="icon" type="button" title="Increase text size" aria-label="Increase text size"
-              data-font-size-change="1"><span class="icon-pair" aria-hidden="true"><i
-                  class="ph ph-text-aa"></i><i class="ph ph-plus"></i></span></button>
-          </div>
-        </div>
         <div class="editor" aria-label="Reader text">
           <pre id="highlights" class="highlights" aria-hidden="true"></pre>
           <textarea id="script" placeholder="Paste or type text to read…" spellcheck="true"></textarea>
@@ -63,32 +72,33 @@
 
         <section class="panel">
 
-          <div class="font-controls desktop-font-controls">
-            <button class="icon" type="button" title="Decrease text size" aria-label="Decrease text size"
-              data-font-size-change="-1"><span class="icon-pair" aria-hidden="true"><i
-                  class="ph ph-text-aa"></i><i class="ph ph-minus"></i></span></button>
-            <span class="font-size-value" data-font-size>12px</span><button class="icon" type="button"
-              title="Increase text size" aria-label="Increase text size" data-font-size-change="1"><span
-                class="icon-pair" aria-hidden="true"><i class="ph ph-text-aa"></i><i
-                  class="ph ph-plus"></i></span></button>
-          </div>
-          <div id="search" class="search">
-            <input id="search-query" type="search" placeholder="Find in text" aria-label="Find in text">
-            <button id="find" class="button-with-icon"><i class="ph ph-magnifying-glass" aria-hidden="true"></i><span>Find</span></button><button id="close-search" class="icon" title="Close find" aria-label="Close find"><i class="ph ph-x" aria-hidden="true"></i></button>
-          </div>
+          <div class="mode"><label for="mode">Mode</label><select id="mode">
+              <option value="reader">Reader Mode</option>
+              <option value="dialog">Dialog Mode</option>
+            </select></div>
+
+          <br>
+
+          <div class="speed"><label for="speed">Speed</label><input id="speed" type="range" min="0.4" max="2.5"
+              step="0.05" value="0.9"><span id="speed-value">0.90x</span></div>
+
+
 
         </section>
+
         <section class="panel">
           <h2>Import Text</h2>
-          <button id="paste" class="primary button-with-icon"><i class="ph ph-clipboard-text" aria-hidden="true"></i><span>Paste All</span></button>
+          <button id="paste" class="primary button-with-icon"><i class="ph ph-clipboard-text"
+              aria-hidden="true"></i><span>Paste All</span></button>
         </section>
 
 
         <section class="panel" id="server-panel">
           <h2>Share with Other Devices</h2>
           <div class="row"><label for="server-port">Port</label><input id="server-port" class="grow" type="number"
-              min="1" max="65535" value="8765"><button id="server-toggle" class="primary button-with-icon"><i class="ph ph-share-network" aria-hidden="true"></i><span class="button-label">Allow devices &amp;
-              start</span></button></div>
+              min="1" max="65535" value="8765"><button id="server-toggle" class="primary button-with-icon"><i
+                class="ph ph-share-network" aria-hidden="true"></i><span class="button-label">Allow devices &amp;
+                start</span></button></div>
           <a id="server-url" class="server-url" target="_blank" rel="noreferrer"></a>
           <p id="server-message">Share this reader with trusted devices on your network.</p>
         </section>
@@ -97,8 +107,10 @@
           <h2 id="characters-title">Reader Voice</h2>
           <select id="character-list" size="5" aria-label="Characters"></select>
           <div>
-            <div id="character-actions" class="character-actions"><button id="add-character" class="button-with-icon"><i class="ph ph-plus" aria-hidden="true"></i><span>Add</span></button><button
-                id="delete-character" class="button-with-icon"><i class="ph ph-trash" aria-hidden="true"></i><span>Delete</span></button></div>
+            <div id="character-actions" class="character-actions"><button id="add-character" class="button-with-icon"><i
+                  class="ph ph-plus" aria-hidden="true"></i><span>Add</span></button><button id="delete-character"
+                class="button-with-icon"><i class="ph ph-trash" aria-hidden="true"></i><span>Delete</span></button>
+            </div>
             <div class="properties">
               <div id="name-property" class="property"><label for="character-name">Name</label><input
                   id="character-name" autocomplete="off"></div>
@@ -115,7 +127,8 @@
     </main>
     <nav class="mobile-tabs" aria-label="Mobile views" role="tablist">
       <button id="mobile-tab-read" class="mobile-tab" type="button" role="tab" aria-selected="true"
-        aria-controls="reader-view" data-mobile-view="read"><i class="ph ph-book-open-text" aria-hidden="true"></i><span>Read</span></button>
+        aria-controls="reader-view" data-mobile-view="read"><i class="ph ph-book-open-text"
+          aria-hidden="true"></i><span>Read</span></button>
       <button id="mobile-tab-controls" class="mobile-tab" type="button" role="tab" aria-selected="false"
         aria-controls="controls-view" data-mobile-view="controls" tabindex="-1"><i class="ph ph-sliders-horizontal"
           aria-hidden="true"></i><span>Controls</span></button>

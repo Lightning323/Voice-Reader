@@ -170,12 +170,25 @@
       flex: 0 0 auto;
     }
 
+    .reader-settings {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex: 0 0 auto;
+      min-width: max-content;
+      padding: 0px 6px;
+      border-radius: 8px;
+    }
+
+    .reader-settings[hidden] {
+      display: none;
+    }
+
     .speed {
       display: flex;
       align-items: center;
       gap: 7px;
-      min-width: 225px;
-      margin-left: 9px;
+      min-width: 210px;
     }
 
     .speed input {
@@ -194,11 +207,30 @@
       display: flex;
       align-items: center;
       gap: 7px;
-      margin-left: auto;
       min-width: 184px;
     }
 
+    .search {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 210px;
+      margin: 0;
+    }
+
+    .search input {
+      min-width: 0;
+      max-width: 190px;
+    }
+
+    .font-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
     .status {
+      margin-left: auto;
       max-width: 180px;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -219,21 +251,6 @@
       min-height: 0;
       height: 100%;
       gap: 8px;
-    }
-
-    .search {
-      display: none;
-      align-items: center;
-      gap: 7px;
-      margin-top: 8px;
-    }
-
-    .search.visible {
-      display: flex;
-    }
-
-    .search input {
-      max-width: 560px;
     }
 
     .editor {
@@ -382,17 +399,18 @@
       display: none;
     }
 
-    .font-controls {
-      display: flex;
-      gap: 6px;
-    }
-
     .font-controls span {
       align-self: center;
       color: var(--muted);
     }
 
-    .mobile-text-toolbar,
+    .font-size-value {
+      min-width: 3.6em;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      text-align: center;
+    }
+
     .mobile-tabs {
       display: none;
     }
@@ -487,19 +505,31 @@
       display: none;
     }
 
+    @media (max-width: 600px) {
+      .controls {
+        width: 100%;
+      }
+      .speed{
+            width: 100%;
+      }
+
+      .controls button {
+        flex: auto;
+      }
+    }
+
     @media (max-width: 900px) {
       body {
         overflow: hidden;
       }
 
+
       .app {
         grid-template-rows: auto minmax(0, 1fr) auto;
         height: 100%;
         min-height: 100vh;
-      }
-
-      .toolbar {
-        flex-wrap: wrap;
+                display: flex;
+        flex-direction: column;
       }
 
       .app[data-mobile-view="controls"] .toolbar {
@@ -547,57 +577,6 @@
         margin-left: 0;
       }
 
-      .desktop-font-controls {
-        display: none;
-      }
-
-      .mobile-text-toolbar {
-        position: absolute;
-        z-index: 4;
-        top: 10px;
-        right: 10px;
-        display: grid;
-        justify-items: end;
-        gap: 6px;
-      }
-
-      .mobile-text-toolbar-toggle {
-        border-color: var(--border);
-        background: var(--surface);
-        box-shadow: 0 4px 14px var(--shadow);
-      }
-
-      .mobile-text-toolbar-toggle .ph:last-child {
-        font-size: .9em;
-        transition: transform 150ms ease;
-      }
-
-      .mobile-text-toolbar.expanded .mobile-text-toolbar-toggle .ph:last-child {
-        transform: rotate(180deg);
-      }
-
-      .mobile-text-toolbar-content {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 6px;
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        background: var(--surface);
-        box-shadow: 0 5px 18px var(--shadow);
-      }
-
-      .mobile-text-toolbar-content[hidden] {
-        display: none;
-      }
-
-      .font-size-value {
-        min-width: 3.6em;
-        color: var(--muted);
-        font-variant-numeric: tabular-nums;
-        text-align: center;
-      }
-
       .mobile-tabs {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -628,4 +607,24 @@
         border-color: var(--accent-hover);
         background: var(--accent-hover);
       }
+    }
+
+    .toolbar.compact-settings {
+      flex-wrap: wrap;
+    }
+
+    .toolbar.compact-settings .reader-settings {
+      order: 10;
+      flex: 1 0 100%;
+      width: 100%;
+      min-width: 0;
+      flex-wrap: wrap;
+      padding: 9px 0 0;
+      border: 0;
+      border-top: 1px solid var(--border);
+      border-radius: 0;
+      background: transparent;
+
+
+      
     }
