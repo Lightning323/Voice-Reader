@@ -1,7 +1,7 @@
 <img src="icon/icon.png" alt="Voice Reader Icon" width=200></img>
 
 # 🎙️ Voice Reader
-Voice Reader is a desktop web UI for reading screenplays and written content aloud using text-to-speech powered by [Kokoro](https://github.com/hexgrad/kokoro). The window is provided by pywebview rather than a native widget toolkit.
+Voice Reader is a Python-based UI application for reading screenplays and written content aloud using text-to-speech powered by [Kokoro](https://github.com/hexgrad/kokoro). 
 
 Voice Reader supports two reading modes:
 
@@ -42,16 +42,6 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-On Linux, the requirements install pywebview's Qt browser backend as well. If
-you previously installed only `pywebview`, rerun the command above so the Qt
-backend is added.
-
-For an X11 desktop on Ubuntu, Debian, or Zorin, install Qt's system windowing
-dependency once before running the app:
-```bash
-sudo apt-get install libxcb-cursor0
-```
-
 4. Run
 ```bash
 python main.py
@@ -76,15 +66,12 @@ Reader Mode ignores screenplay-style character changes and focuses on natural na
 
 ## Web Interface
 
-The desktop window loads directly from a local file and does **not** reserve a
-port. This keeps the normal app free of port conflicts.
-
-To let another device use the reader, choose a port in **Share with Other
-Devices** and select **Allow devices & start**. The app displays a local-network
-URL to open on a trusted device. Select **Stop sharing** when finished. While
-sharing is running, generated audio is sent to the connected browser instead of
-the computer speakers. The browser offers Play, Pause, Stop, Back, and Forward
-controls and displays the current highlighted text and active voice.
+Use the **Web Interface** panel below **Import Text** to choose a port and select
+**Start Server**. The app displays a local-network URL; open it in a browser on
+the same network. The page can load text into the desktop editor and offers Play,
+Pause, Stop, Back, and Forward controls. While the server is running, generated
+audio is sent to the browser instead of the computer speakers. It also displays
+the current highlighted text, generated buffer, and active voice.
 
 The server is intended for a trusted local network. Stop it when it is no longer
 needed.

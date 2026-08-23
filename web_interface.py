@@ -11,7 +11,6 @@ import io
 import os
 import json
 import socket
-import sys
 import threading
 import time
 import uuid
@@ -19,12 +18,6 @@ import wave
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Callable, Optional
-
-
-def _resource_path(*parts: str) -> str:
-    """Find browser assets in source runs and PyInstaller bundles."""
-    base = getattr(sys, "_MEIPASS", os.path.dirname(__file__))
-    return os.path.join(base, *parts)
 
 
 
@@ -405,8 +398,7 @@ class _WebRequestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         if self.path == "/" or self.path == "/index.html":
-            with open(_resource_path("webapp", "index.html"), encoding="utf-8") as file:
-                page = file.read()
+            page = open(os.path.join(os.path.dirname(__file__), "webapp/index.html")).read()
             self._send(
                 HTTPStatus.OK, "text/html; charset=utf-8", page.encode("utf-8")
             )

@@ -4,6 +4,7 @@ import scriptParsing
 from playback import playback_thread, seek, start_playback, pause_playback, stop_playback, shutdown_playback,  audio_queue, generation_stop,generation_lock, set_audio_index
 import characters
 import time
+from multiprocessing import Process
 from web_interface import WebInterfaceServer
 # ============================================================
 # KOKORO SETUP
@@ -242,20 +243,14 @@ app = ui.VoiceReaderUI(
 )
 app.web_server = web_server
 
-_shutdown_started = False
-
-
 def shutdown():
-    global _shutdown_started
-    if _shutdown_started:
-        return
-    _shutdown_started = True
     print("Shutting down...")
     web_server.stop()
     shutdown_playback(app)
+    app.root.destroy()
 
 
-app.set_shutdown_callback(shutdown)
+app.root.protocol("WM_DELETE_WINDOW", shutdown)
 
 # ============================
 # PERMANENT PLAYBACK THREAD

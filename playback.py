@@ -101,7 +101,9 @@ def seek(readerUI, seekVector):
     #     interrupt_audio()
     #     start_playback(readerUI)
 
-    readerUI.set_status("Skipping " + ("forward" if seekVector == 1 else "backward"))
+    readerUI.status.config(
+        text="Skipping " + ("forward" if seekVector == 1 else "backward")
+    )
     playback_index += seekVector
     set_audio_index(playback_index)
 
