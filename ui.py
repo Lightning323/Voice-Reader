@@ -17,6 +17,7 @@ class VoiceReaderUI:
         pauseRunnable=None,
         seekRunnable=None,
         modeChangeRunnable=None,
+        webServerRunnable=None,
     ):
         self.advanced_mode = not os.path.exists("simple-mode.txt")
         self.playRunnable = playRunnable
@@ -24,6 +25,9 @@ class VoiceReaderUI:
         self.pauseRunnable = pauseRunnable
         self.seekRunnable = seekRunnable
         self.modeChangeRunnable = modeChangeRunnable
+        self.webServerRunnable = webServerRunnable
+        # Attached by main.py after it creates the web server controller.
+        self.web_server = None
 
         self.root = ttk.Window()
         self.root.title("Voice Reader")
@@ -195,6 +199,45 @@ class VoiceReaderUI:
         ).pack(fill="x", padx=5, pady=5)
         self.import_frame.pack(fill="both", expand=False, padx=10)
 
+        # -----------------------------
+        # WEB INTERFACE
+        # -----------------------------
+        self.web_server_frame = ttk.Frame(right_panel, height=122)
+        self.web_server_frame.pack_propagate(False)
+        self.web_server_frame.grid_propagate(False)
+
+        ttk.Label(
+            self.web_server_frame,
+            text="Web Interface",
+            font=("", 10, "bold"),
+        ).pack(side="top", anchor="w", padx=5, pady=(8, 4))
+
+        web_controls = ttk.Frame(self.web_server_frame)
+        web_controls.pack(fill="x", padx=5)
+        ttk.Label(web_controls, text="Port").pack(side="left", padx=(0, 6))
+        self.web_port = tk.StringVar(value="8765")
+        self.web_port_selector = ttk.Combobox(
+            web_controls,
+            textvariable=self.web_port,
+            values=("8765", "8080", "5000"),
+            width=8,
+        )
+        self.web_port_selector.pack(side="left")
+        self.web_server_button = ttk.Button(
+            web_controls,
+            text="Start Server",
+            command=self.toggle_web_server,
+        )
+        self.web_server_button.pack(side="right")
+        self.web_server_status = ttk.Label(
+            self.web_server_frame,
+            text="Start a local server to use Voice Reader from a browser.",
+            wraplength=290,
+            justify="left",
+        )
+        self.web_server_status.pack(fill="x", padx=5, pady=(7, 0))
+        self.web_server_frame.pack(fill="x", expand=False, padx=10, pady=(8, 4))
+
         # ==========================================
         # Right vertical splitter
         # ==========================================
@@ -326,6 +369,9 @@ class VoiceReaderUI:
         if set_margin:
             self.script.tag_add("page_margin", "1.0", "end")
 
+        if self.web_server and self.web_server.is_running:
+            self.web_server.update_state(text=text)
+
     def get_script_contents(self):
         return self.script.get("1.0", "end-1c")
 
@@ -383,7 +429,63 @@ class VoiceReaderUI:
         self.ui(update)
 
     def set_status(self, text):
+        if self.web_server and self.web_server.is_running:
+            self.web_server.update_state(status=text)
         self.ui(lambda: self.status.config(text=text))
+
+    # ========================================================
+    # WEB PLAYBACK BRIDGE
+    # ========================================================
+
+    def is_web_audio_active(self):
+        return bool(self.web_server and self.web_server.is_running)
+
+    def web_begin_buffering(self, text):
+        if self.is_web_audio_active():
+            self.web_server.begin_buffering(text)
+
+    def web_add_buffered_line(self, text, voice):
+        if self.is_web_audio_active():
+            return self.web_server.add_buffered_line(text, voice)
+        return None
+
+    def web_start_line(self, item_id, text, voice):
+        if self.is_web_audio_active():
+            self.web_server.start_line(item_id, text, voice)
+
+    def web_send_audio(self, pcm, duration, volume):
+        if self.is_web_audio_active():
+            return self.web_server.publish_wav(pcm, duration, volume)
+        return False
+
+    def web_interrupt_audio(self):
+        if self.is_web_audio_active():
+            self.web_server.interrupt_audio()
+
+    def web_clear_playback(self):
+        if self.is_web_audio_active():
+            self.web_server.clear_playback()
+
+    def toggle_web_server(self):
+        if not self.webServerRunnable:
+            self.set_web_server_status(False, "Web interface is unavailable.")
+            return
+
+        try:
+            port = int(self.web_port.get())
+        except ValueError:
+            self.set_web_server_status(False, "Enter a valid port number.")
+            return
+
+        success, message, running = self.webServerRunnable(self, port)
+        self.set_web_server_status(running, message)
+        if not success:
+            return
+
+    def set_web_server_status(self, running, message):
+        self.web_server_button.config(text="Stop Server" if running else "Start Server")
+        self.web_port_selector.config(state="disabled" if running else "normal")
+        self.web_server_status.config(text=message)
 
     # ========================================================
     # CONTROLS

@@ -5,6 +5,7 @@ from playback import playback_thread, seek, start_playback, pause_playback, stop
 import characters
 import time
 from multiprocessing import Process
+from web_interface import WebInterfaceServer
 # ============================================================
 # KOKORO SETUP
 # ============================================================
@@ -34,6 +35,10 @@ class AudioSample:
         self.line = line
         self.volume_multiplier = volume_multiplier
         self.end_offset = end_offset
+        # The browser UI uses this to remove the item from its buffered text
+        # when playback reaches it.
+        self.web_item_id = None
+        self.web_voice = ""
 
 
 def clamp(value, min_value, max_value):
@@ -69,7 +74,7 @@ def should_cancel_generation(my_gen_id):
             return True
     return False
 
-def generate(readerUI, scriptLines):
+def generate(readerUI, scriptLines, source_text):
     global character_voices, buffer_char_size, gen_threads, latest_gen_id
     cancel_generation(readerUI, max_iterations=10, delay=0.1) # We will wait up to 1 second for threads to drop to 0 first
 
@@ -91,6 +96,7 @@ def generate(readerUI, scriptLines):
         
         readerUI.set_status("Buffering")
         readerUI.log("Generating audio...")
+        readerUI.web_begin_buffering(source_text)
 
         for line in scriptLines:
             if should_cancel_generation(my_gen_id):
@@ -126,7 +132,12 @@ def generate(readerUI, scriptLines):
 
             if should_cancel_generation(my_gen_id):
                 return
-            audio_queue.append(AudioSample(audio_chunks, line, volume_multiplier, end_offset))
+            sample = AudioSample(audio_chunks, line, volume_multiplier, end_offset)
+            sample.web_item_id = readerUI.web_add_buffered_line(
+                line.text, character.voice
+            )
+            sample.web_voice = character.voice
+            audio_queue.append(sample)
 
         if not should_cancel_generation(my_gen_id):
             audio_queue.append(None)
@@ -179,7 +190,7 @@ def play(readerUI, text):
             cached_text = readerUI.get_script_contents()
 
             gen_thread = threading.Thread(
-                target=generate, args=(readerUI, script_lines), daemon=True
+                target=generate, args=(readerUI, script_lines, cached_text), daemon=True
             )
             gen_thread.start()
             
@@ -197,10 +208,44 @@ def change_mode(readerUI, dialog_mode):
 # START APP
 # ============================================================
 
-app = ui.VoiceReaderUI(playRunnable=play, stopRunnable=stop_playback, pauseRunnable=pause_playback, seekRunnable=seek, modeChangeRunnable=change_mode)
+app = None
+web_server = WebInterfaceServer(lambda: app)
+
+
+def toggle_web_server(readerUI, port):
+    """Start or stop browser playback from the desktop-side widget."""
+    if web_server.is_running:
+        # Stop rather than silently switching an in-progress browser read back
+        # to the desktop speakers when the server is turned off.
+        stop_playback(readerUI)
+        web_server.stop()
+        return True, "Web interface stopped.", False
+
+    # A newly enabled browser session starts cleanly, so its audio never mixes
+    # with a desktop-speaker session that was already in progress.
+    stop_playback(readerUI)
+    started, detail = web_server.start(port)
+    if not started:
+        return False, detail, False
+
+    web_server.begin_buffering(readerUI.get_script_contents())
+    web_server.update_state(status="Web interface ready")
+    return True, f"Open {detail} in a browser on your local network.", True
+
+
+app = ui.VoiceReaderUI(
+    playRunnable=play,
+    stopRunnable=stop_playback,
+    pauseRunnable=pause_playback,
+    seekRunnable=seek,
+    modeChangeRunnable=change_mode,
+    webServerRunnable=toggle_web_server,
+)
+app.web_server = web_server
 
 def shutdown():
     print("Shutting down...")
+    web_server.stop()
     shutdown_playback(app)
     app.root.destroy()
 

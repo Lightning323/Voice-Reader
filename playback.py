@@ -68,6 +68,7 @@ def pause_playback(readerUI):
         play_event.clear()
         allow_playback = False
         interrupt_audio()  # Set playback to false THAN interrupt (Interrupt last)
+        readerUI.web_interrupt_audio()
 
     print("Paused")
     readerUI.playback_mode(False)
@@ -85,6 +86,8 @@ def stop_playback(readerUI):
         audio_queue.clear()  # Clear audio cache
         cached_text = ""
         generation_stop.set()  # Stop generating
+
+    readerUI.web_clear_playback()
 
     print("Stopped")
     readerUI.set_status("Stopped")
@@ -168,9 +171,13 @@ def playback_thread(readerUI):
                         speed_info = f"({sample.line.speed_multiplier:.2f}x) "
                     readerUI.log(f'{sample.line.character}: {speed_info}"{sample.line.text}"')
                     readerUI.set_status(f"{sample.line.character}")
+                    readerUI.web_start_line(
+                        sample.web_item_id, sample.line.text, sample.web_voice
+                    )
                 #print("Playing... ", playback_index, sample.line, sample.volume_multiplier)
                 playing_index = playback_index
                 interrupted = play_audio(
+                    readerUI,
                     sample.audio,
                     volume_multiplier=sample.volume_multiplier,
                     end_offset=sample.end_offset,
@@ -190,8 +197,11 @@ Returns true if interrupted
 """
 
 
-def play_audio(audio_chunks, volume_multiplier, end_offset):
+def play_audio(readerUI, audio_chunks, volume_multiplier, end_offset):
     global current_channel
+
+    if readerUI and readerUI.is_web_audio_active():
+        return play_web_audio(readerUI, audio_chunks, volume_multiplier, end_offset)
 
     if audio_chunks is None:  # Still play a pause
         if delay_unless_interrupted(None, (max(1, 1 + end_offset))):
@@ -216,6 +226,30 @@ def play_audio(audio_chunks, volume_multiplier, end_offset):
                     current_channel, max(0.01, duration + end_offset)
                 ):
                     return True
+
+    return False
+
+
+def play_web_audio(readerUI, audio_chunks, volume_multiplier, end_offset):
+    """Stream playback clips to the browser while preserving normal timing."""
+    if audio_chunks is None:  # Still preserve script pauses in browser mode.
+        if delay_unless_interrupted(None, max(1, 1 + end_offset)):
+            return True
+        return False
+
+    for index, audio in enumerate(audio_chunks):
+        pcm = np.clip(
+            audio.detach().cpu().numpy().flatten() * 32767, -32768, 32767
+        ).astype(np.int16)
+        duration = len(pcm) / 24000
+        if not readerUI.web_send_audio(pcm.tobytes(), duration, volume_multiplier):
+            return True
+
+        wait_time = duration
+        if index == len(audio_chunks) - 1:
+            wait_time = max(0.01, duration + end_offset)
+        if delay_unless_interrupted(None, wait_time):
+            return True
 
     return False
 

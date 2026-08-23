@@ -17,6 +17,7 @@ Voice Reader supports two reading modes:
 - ⏸️ Natural pauses and interruptions
 - 📖 Single-voice narration mode
 - 🔊 Kokoro TTS integration
+- 🌐 Optional browser controls and browser audio playback
 
 --------------
 
@@ -62,6 +63,18 @@ Lines can include special markers to adjust how they are spoken.
 Reader Mode is intended for content that uses a single narrator voice. Recommended for Articles, Stories, Books, Documentation or Essays
 
 Reader Mode ignores screenplay-style character changes and focuses on natural narration.
+
+## Web Interface
+
+Use the **Web Interface** panel below **Import Text** to choose a port and select
+**Start Server**. The app displays a local-network URL; open it in a browser on
+the same network. The page can load text into the desktop editor and offers Play,
+Pause, Stop, Back, and Forward controls. While the server is running, generated
+audio is sent to the browser instead of the computer speakers. It also displays
+the current highlighted text, generated buffer, and active voice.
+
+The server is intended for a trusted local network. Stop it when it is no longer
+needed.
 
 
 # Character Voices
