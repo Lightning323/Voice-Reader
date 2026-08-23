@@ -132,10 +132,10 @@
       const mark = highlights.querySelector('mark.seek, mark.playing');
       if (!mark) return;
       const top = mark.offsetTop;
-      const bottom = top + mark.offsetHeight;
-      if (top < script.scrollTop || bottom > script.scrollTop + script.clientHeight) {
+      // const bottom = top + mark.offsetHeight+20;
+      // if (top < script.scrollTop || bottom > script.scrollTop + script.clientHeight) {
         script.scrollTop = Math.max(0, top - (script.clientHeight - mark.offsetHeight) / 2);
-      }
+      // }
     }
 
     function setOptions(select, values, selected) {
