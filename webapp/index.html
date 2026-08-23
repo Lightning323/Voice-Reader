@@ -3,7 +3,8 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
   <title>Voice Reader</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/regular/style.css">
   <style>
@@ -26,11 +27,11 @@
 
 
     .highlights mark.buffered {
-      background: #889aaf;
+      background: #a3b8cf;
     }
 
     .highlights mark.playing {
-      background: #b58900;
+      background: #f3b600;
     }
 
     .highlights mark.seek {
@@ -40,17 +41,17 @@
 
     @media (prefers-color-scheme: dark) {
 
-    .highlights mark.buffered {
-      background: #536171;
-    }
+      .highlights mark.buffered {
+        background: #536171;
+      }
 
-    .highlights mark.playing {
-      background: #886600;
-    }
+      .highlights mark.playing {
+        background: #806000;
+      }
 
-    .highlights mark.seek {
-      background: #1677d2;
-    }
+      .highlights mark.seek {
+        background: #1677d2;
+      }
 
       :root {
         color-scheme: dark;
@@ -345,6 +346,7 @@
       min-height: 0;
       overflow: hidden;
       overscroll-behavior: none;
+      touch-action: pan-y;
     }
 
     .workspace {
@@ -556,11 +558,16 @@
   <main class="workspace">
     <section class="toolbar" aria-label="Playback controls">
       <div class="controls">
-        <button id="load" title="Load text"><i class="ph ph-file-arrow-up" aria-hidden="true"></i><span class="button-label">Load</span></button>
-        <button id="play-pause" class="primary" data-action="play" title="Play" aria-label="Play"><i class="ph ph-play" aria-hidden="true"></i><span class="button-label">Play</span></button>
-        <button data-action="back" title="Back"><i class="ph ph-skip-back" aria-hidden="true"></i><span class="button-label">Back</span></button>
-        <button data-action="forward" title="Forward"><i class="ph ph-skip-forward" aria-hidden="true"></i><span class="button-label">Forward</span></button>
-        <button class="stop" data-action="stop" title="Stop"><i class="ph ph-stop" aria-hidden="true"></i><span class="button-label">Stop</span></button>
+        <button id="load" title="Load text"><i class="ph ph-file-arrow-up" aria-hidden="true"></i><span
+            class="button-label">Load</span></button>
+        <button id="play-pause" class="primary" data-action="play" title="Play" aria-label="Play"><i class="ph ph-play"
+            aria-hidden="true"></i><span class="button-label">Play</span></button>
+        <button data-action="back" title="Back"><i class="ph ph-skip-back" aria-hidden="true"></i><span
+            class="button-label">Back</span></button>
+        <button data-action="forward" title="Forward"><i class="ph ph-skip-forward" aria-hidden="true"></i><span
+            class="button-label">Forward</span></button>
+        <button class="stop" data-action="stop" title="Stop"><i class="ph ph-stop" aria-hidden="true"></i><span
+            class="button-label">Stop</span></button>
       </div>
       <div class="toolbar-status" aria-live="polite">
         <strong id="status">Idle</strong>
@@ -573,7 +580,8 @@
     </section>
 
     <section class="details">
-      <button id="details-toggle" class="details-toggle" type="button" aria-controls="details-panel" aria-expanded="false">
+      <button id="details-toggle" class="details-toggle" type="button" aria-controls="details-panel"
+        aria-expanded="false">
         <span>Show playback details</span><i class="ph ph-caret-up" aria-hidden="true"></i>
       </button>
       <div id="details-panel" class="details-panel" hidden>
@@ -833,6 +841,18 @@
       detailsPanel.hidden = isOpen;
       detailsToggle.querySelector('span').textContent = isOpen ? 'Show playback details' : 'Hide playback details';
     });
+
+    // Safari ignores user-scalable=no in the viewport tag, so cancel its
+    // gesture events as well. One-finger scrolling remains available.
+    const preventPinchZoom = (event) => {
+      if (event.cancelable) event.preventDefault();
+    };
+    document.addEventListener('gesturestart', preventPinchZoom, { passive: false });
+    document.addEventListener('gesturechange', preventPinchZoom, { passive: false });
+    document.addEventListener('gestureend', preventPinchZoom, { passive: false });
+    document.addEventListener('touchmove', (event) => {
+      if (event.touches.length > 1) preventPinchZoom(event);
+    }, { passive: false });
 
     const events = new EventSource('/api/events');
     events.addEventListener('state', (event) => render(JSON.parse(event.data)));
