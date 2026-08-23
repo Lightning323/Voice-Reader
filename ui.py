@@ -457,6 +457,10 @@ class VoiceReaderUI:
                 item_id, text, voice, start_line, end_line
             )
 
+    def web_seek_line(self, start_line, end_line):
+        if self.is_web_audio_active():
+            self.web_server.seek_line(start_line, end_line)
+
     def web_send_audio(self, pcm, duration, volume):
         if self.is_web_audio_active():
             return self.web_server.publish_wav(pcm, duration, volume)

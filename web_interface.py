@@ -29,6 +29,7 @@ class _WebState:
     voice: str = ""
     highlighted_text: str = ""
     highlighted_lines: Optional[dict] = None
+    seek_lines: Optional[dict] = None
     buffered_items: list[dict] = field(default_factory=list)
 
     def as_dict(self) -> dict:
@@ -38,6 +39,7 @@ class _WebState:
             "voice": self.voice,
             "highlighted_text": self.highlighted_text,
             "highlighted_lines": self.highlighted_lines,
+            "seek_lines": self.seek_lines,
             "buffered_text": "\n\n".join(item["text"] for item in self.buffered_items),
             "buffered_lines": [
                 {
@@ -171,6 +173,7 @@ class WebInterfaceServer:
             self._state.text = text
             self._state.highlighted_text = ""
             self._state.highlighted_lines = None
+            self._state.seek_lines = None
             self._state.voice = ""
             self._state.buffered_items.clear()
             state = self._state.as_dict()
@@ -212,7 +215,18 @@ class WebInterfaceServer:
                 "start_line": start_line,
                 "end_line": end_line,
             }
+            self._state.seek_lines = None
             self._state.voice = voice
+            state = self._state.as_dict()
+        self._broadcast("state", state)
+
+    def seek_line(self, start_line: int, end_line: int) -> None:
+        """Show the line selected by the browser's seek controls."""
+        with self._lock:
+            self._state.seek_lines = {
+                "start_line": start_line,
+                "end_line": end_line,
+            }
             state = self._state.as_dict()
         self._broadcast("state", state)
 
@@ -221,6 +235,7 @@ class WebInterfaceServer:
         with self._lock:
             self._state.highlighted_text = ""
             self._state.highlighted_lines = None
+            self._state.seek_lines = None
             self._state.voice = ""
             self._state.buffered_items.clear()
             self._audio.clear()

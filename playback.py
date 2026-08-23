@@ -111,6 +111,7 @@ def seek(readerUI, seekVector):
         sample = audio_queue[playback_index]
         if sample is not None:
             readerUI.highlight_seek(f"{sample.line.start}.0", f"{sample.line.end}.end")
+            readerUI.web_seek_line(sample.line.start, sample.line.end)
 
 
 def playback_thread(readerUI):
