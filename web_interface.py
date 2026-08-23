@@ -63,7 +63,6 @@ class WebInterfaceServer:
         self._state = _WebState()
         self._listeners: list["queue.Queue"] = []
         self._audio: dict[str, tuple[bytes, float]] = {}
-        self._current_audio: Optional[dict] = None
 
     @property
     def is_running(self) -> bool:
@@ -170,7 +169,6 @@ class WebInterfaceServer:
             return self._state.as_dict()
 
     def begin_buffering(self, text: str) -> None:
-        self.interrupt_audio()
         with self._lock:
             self._state.text = text
             self._state.highlighted_text = ""
@@ -178,7 +176,6 @@ class WebInterfaceServer:
             self._state.seek_lines = None
             self._state.voice = ""
             self._state.buffered_items.clear()
-            self._audio.clear()
             state = self._state.as_dict()
         self._broadcast("state", state)
 
@@ -247,8 +244,6 @@ class WebInterfaceServer:
 
     def interrupt_audio(self) -> None:
         """Tell clients to immediately discard their current browser audio."""
-        with self._lock:
-            self._current_audio = None
         self._broadcast("audio-stop", {})
 
     def publish_wav(self, pcm: bytes, duration: float, volume: float) -> bool:
@@ -271,17 +266,13 @@ class WebInterfaceServer:
                 key: value for key, value in self._audio.items() if now - value[1] < 300
             }
             self._audio[audio_id] = (output.getvalue(), now)
-            payload = {
-                "id": audio_id,
+        self._broadcast(
+            "audio",
+            {
                 "url": f"/api/audio/{audio_id}.wav",
                 "duration": duration,
                 "volume": max(0.0, min(1.0, volume)),
-                "started_at": now,
-            }
-            self._current_audio = payload
-        self._broadcast(
-            "audio",
-            payload,
+            },
         )
         return True
 
@@ -289,21 +280,6 @@ class WebInterfaceServer:
         with self._lock:
             item = self._audio.get(audio_id)
             return item[0] if item else None
-
-    def current_audio(self) -> list[dict]:
-        """Return the clip still being played, so a returning browser can recover."""
-        with self._lock:
-            item = self._current_audio
-            if item is None or time.monotonic() >= item["started_at"] + item["duration"]:
-                return []
-            return [
-                {
-                    "id": item["id"],
-                    "url": item["url"],
-                    "duration": item["duration"],
-                    "volume": item["volume"],
-                }
-            ]
 
     def add_listener(self, listener: "queue.Queue") -> None:
         with self._lock:
@@ -380,13 +356,6 @@ class _WebRequestHandler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/events":
             self._serve_events()
-            return
-        if self.path == "/api/audio/current":
-            self._send(
-                HTTPStatus.OK,
-                "application/json; charset=utf-8",
-                json.dumps({"audio": self.web_interface.current_audio()}).encode("utf-8"),
-            )
             return
         if self.path.startswith("/api/audio/") and self.path.endswith(".wav"):
             audio_id = self.path.removeprefix("/api/audio/").removesuffix(".wav")

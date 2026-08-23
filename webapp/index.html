@@ -411,10 +411,6 @@
       font-weight: 650;
     }
 
-    #resume-audio[hidden] {
-      display: none;
-    }
-
     .workspace .editor {
       position: relative;
       min-height: 0;
@@ -566,8 +562,6 @@
             class="button-label">Load</span></button>
         <button id="play-pause" class="primary" data-action="play" title="Play" aria-label="Play"><i class="ph ph-play"
             aria-hidden="true"></i><span class="button-label">Play</span></button>
-        <button id="resume-audio" type="button" title="Enable audio" aria-label="Enable audio" hidden><i class="ph ph-speaker-high"
-            aria-hidden="true"></i><span class="button-label">Enable audio</span></button>
         <button data-action="back" title="Back"><i class="ph ph-skip-back" aria-hidden="true"></i><span
             class="button-label">Back</span></button>
         <button data-action="forward" title="Forward"><i class="ph ph-skip-forward" aria-hidden="true"></i><span
@@ -627,18 +621,13 @@
     const detailsToggle = document.querySelector('#details-toggle');
     const detailsPanel = document.querySelector('#details-panel');
     const playPause = document.querySelector('#play-pause');
-    const resumeAudio = document.querySelector('#resume-audio');
     let writingText = false;
     let audioQueue = [];
     let audioPlaying = false;
     let currentSource = null;
-    let currentAudioItem = null;
-    let audioWatchdog = null;
     let audioContext = null;
     let audioUnlockPromise = null;
-    let audioRecoveryPromise = null;
     let audioEpoch = 0;
-    const queuedAudioIds = new Set();
     let readingState = {};
     let lastHighlightKey = '';
 
@@ -754,62 +743,20 @@
       }
     }
 
-    function audioItemKey(item) {
-      return item.id || item.url;
-    }
-
-    function setAudioRecoveryRequired(required) {
-      resumeAudio.hidden = !required;
-    }
-
-    function resetBrowserAudio() {
-      audioEpoch += 1;
-      audioQueue = [];
-      queuedAudioIds.clear();
-      if (audioWatchdog) clearTimeout(audioWatchdog);
-      audioWatchdog = null;
-      if (currentSource) {
-        currentSource.onended = null;
-        try {
-          currentSource.stop();
-        } catch (_) {
-          // The source may already have ended while the page was hidden.
-        }
-      }
-      currentSource = null;
-      currentAudioItem = null;
-      audioPlaying = false;
-    }
-
-    function getAudioContext() {
-      if (audioContext && audioContext.state !== 'closed') return audioContext;
-      audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      audioContext.addEventListener('statechange', () => {
-        if (audioContext.state === 'running') {
-          playNextAudio();
-        } else if (audioPlaying || audioQueue.length) {
-          setAudioRecoveryRequired(true);
-          if (document.visibilityState === 'visible') recoverBrowserAudio({ reset: true });
-        }
-      });
-      return audioContext;
-    }
-
     function unlockAudio() {
-      const context = getAudioContext();
-      if (context.state === 'running') return Promise.resolve();
+      if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioContext.state === 'running') return Promise.resolve();
       if (audioUnlockPromise) return audioUnlockPromise;
 
       // iOS Safari requires a source to start in the button's user gesture;
       // resuming the context by itself is not reliable after audio generation.
-      const silentBuffer = context.createBuffer(1, 1, context.sampleRate);
-      const silentSource = context.createBufferSource();
+      const silentBuffer = audioContext.createBuffer(1, 1, audioContext.sampleRate);
+      const silentSource = audioContext.createBufferSource();
       silentSource.buffer = silentBuffer;
-      silentSource.connect(context.destination);
+      silentSource.connect(audioContext.destination);
       silentSource.start(0);
-      audioUnlockPromise = context.resume().then(() => {
-        if (context.state !== 'running') throw new Error('Audio is still blocked by this browser.');
-        setAudioRecoveryRequired(false);
+      audioUnlockPromise = audioContext.resume().then(() => {
+        if (audioContext.state !== 'running') throw new Error('Audio is still blocked by this browser.');
         playNextAudio();
       }).finally(() => {
         audioUnlockPromise = null;
@@ -820,15 +767,15 @@
     async function playNextAudio() {
       if (audioPlaying || !audioQueue.length) return;
       if (!audioContext || audioContext.state !== 'running') {
-        setAudioRecoveryRequired(true);
+        connection.textContent = 'Tap Play to enable audio in this browser.';
+        connection.classList.remove('connected');
         return;
       }
       const item = audioQueue.shift();
       const epoch = audioEpoch;
       audioPlaying = true;
-      currentAudioItem = item;
       try {
-        const response = await fetch(item.url, { cache: 'no-store' });
+        const response = await fetch(item.url);
         if (!response.ok) throw new Error('Audio clip expired.');
         const clip = await audioContext.decodeAudioData(await response.arrayBuffer());
         if (epoch !== audioEpoch) return;
@@ -839,70 +786,24 @@
         source.connect(gain).connect(audioContext.destination);
         currentSource = source;
         source.onended = () => {
-          if (epoch !== audioEpoch || currentSource !== source) return;
-          if (audioWatchdog) clearTimeout(audioWatchdog);
-          audioWatchdog = null;
-          currentSource = null;
-          currentAudioItem = null;
+          if (epoch !== audioEpoch) return;
+          if (currentSource === source) currentSource = null;
           audioPlaying = false;
           playNextAudio();
         };
         source.start();
-        audioWatchdog = setTimeout(() => {
-          if (epoch !== audioEpoch || currentSource !== source) return;
-          resetBrowserAudio();
-          recoverBrowserAudio();
-        }, Math.max(5_000, (clip.duration + 2) * 1_000));
       } catch (error) {
         if (epoch !== audioEpoch) return;
-        queuedAudioIds.delete(audioItemKey(item));
-        currentSource = null;
-        currentAudioItem = null;
+        connection.textContent = `Audio error: ${error.message || 'could not play this clip.'}`;
+        connection.classList.remove('connected');
         audioPlaying = false;
-        setAudioRecoveryRequired(true);
         playNextAudio();
       }
     }
 
     function queueAudio(item) {
-      if (!item || !item.url) return;
-      const key = audioItemKey(item);
-      if (queuedAudioIds.has(key)) return;
-      queuedAudioIds.add(key);
-      if (queuedAudioIds.size > 250) queuedAudioIds.delete(queuedAudioIds.values().next().value);
       audioQueue.push(item);
       playNextAudio();
-    }
-
-    async function fetchCurrentAudio() {
-      const response = await fetch('/api/audio/current', { cache: 'no-store' });
-      if (!response.ok) throw new Error('Could not check the active audio.');
-      const payload = await response.json();
-      return Array.isArray(payload.audio) ? payload.audio : [];
-    }
-
-    async function recoverBrowserAudio({ reset = false, alreadyUnlocked = false } = {}) {
-      if (document.visibilityState === 'hidden') return false;
-      if (reset) resetBrowserAudio();
-      if (audioRecoveryPromise) return audioRecoveryPromise;
-
-      audioRecoveryPromise = (async () => {
-        const activeAudio = await fetchCurrentAudio();
-        if (!activeAudio.length) {
-          setAudioRecoveryRequired(false);
-          return false;
-        }
-        if (!alreadyUnlocked) await unlockAudio();
-        activeAudio.forEach(queueAudio);
-        setAudioRecoveryRequired(false);
-        return true;
-      })().catch(() => {
-        setAudioRecoveryRequired(true);
-        return false;
-      }).finally(() => {
-        audioRecoveryPromise = null;
-      });
-      return audioRecoveryPromise;
     }
 
     document.querySelector('#load').addEventListener('click', () => send({ action: 'load', text: text.value }));
@@ -925,16 +826,8 @@
           .catch((error) => {
             connection.textContent = `Audio could not be enabled: ${error.message}`;
             connection.classList.remove('connected');
-        });
+          });
       });
-    });
-    resumeAudio.addEventListener('click', () => {
-      // This click supplies the user gesture iOS requires after a page has
-      // been restored or recreated in the background.
-      resetBrowserAudio();
-      unlockAudio()
-        .then(() => recoverBrowserAudio({ alreadyUnlocked: true }))
-        .catch(() => setAudioRecoveryRequired(true));
     });
     text.addEventListener('focus', () => writingText = true);
     text.addEventListener('blur', () => writingText = false);
@@ -962,24 +855,19 @@
       if (event.touches.length > 1) preventPinchZoom(event);
     }, { passive: false });
 
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') recoverBrowserAudio({ reset: true });
-    });
-    window.addEventListener('pageshow', (event) => {
-      if (event.persisted) recoverBrowserAudio({ reset: true });
-    });
-
     const events = new EventSource('/api/events');
     events.addEventListener('state', (event) => render(JSON.parse(event.data)));
     events.addEventListener('audio', (event) => queueAudio(JSON.parse(event.data)));
     events.addEventListener('audio-stop', () => {
-      resetBrowserAudio();
-      setAudioRecoveryRequired(false);
+      audioEpoch += 1;
+      audioQueue = [];
+      if (currentSource) currentSource.stop();
+      currentSource = null;
+      audioPlaying = false;
     });
     events.onopen = () => {
       connection.textContent = 'Connected to desktop reader';
       connection.classList.add('connected');
-      recoverBrowserAudio();
     };
     events.onerror = () => {
       connection.textContent = 'Connection lost. Retrying…';
