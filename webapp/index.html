@@ -789,6 +789,7 @@
           if (epoch !== audioEpoch) return;
           if (currentSource === source) currentSource = null;
           audioPlaying = false;
+          acknowledgeAudio(item.id);
           playNextAudio();
         };
         source.start();
@@ -804,6 +805,26 @@
     function queueAudio(item) {
       audioQueue.push(item);
       playNextAudio();
+    }
+
+    async function acknowledgeAudio(audioId) {
+      if (!audioId) return;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          const response = await fetch('/api/audio-complete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: audioId }),
+            keepalive: true,
+          });
+          if (response.ok) return;
+        } catch (_) {
+          // A short retry prevents a transient phone-network drop from
+          // advancing the desktop reader before the clip has actually ended.
+        }
+        await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+      }
+      send({ action: 'pause' });
     }
 
     document.querySelector('#load').addEventListener('click', () => send({ action: 'load', text: text.value }));

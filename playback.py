@@ -223,14 +223,12 @@ def play_audio(readerUI, audio_chunks, volume_multiplier, end_offset):
 
             # print(f"Sound {i} duration: {duration}")
             current_channel = sound.play()
-            if i < len(audio_chunks) - 1:
-                if delay_unless_interrupted(current_channel, duration):
-                    return True
-            else: 
-                if delay_unless_interrupted(
-                    current_channel, max(0.01, duration + end_offset)
-                ):
-                    return True
+            if delay_unless_interrupted(current_channel, duration):
+                return True
+            if i == len(audio_chunks) - 1 and delay_unless_interrupted(
+                None, max(0.01, end_offset)
+            ):
+                return True
 
     return False
 
@@ -247,13 +245,16 @@ def play_web_audio(readerUI, audio_chunks, volume_multiplier, end_offset):
             audio.detach().cpu().numpy().flatten() * 32767, -32768, 32767
         ).astype(np.int16)
         duration = len(pcm) / 24000
-        if not readerUI.web_send_audio(pcm.tobytes(), duration, volume_multiplier):
+        audio_id = readerUI.web_send_audio(pcm.tobytes(), duration, volume_multiplier)
+        if not audio_id:
             return True
-
-        wait_time = duration
-        if index == len(audio_chunks) - 1:
-            wait_time = max(0.01, duration + end_offset)
-        if delay_unless_interrupted(None, wait_time):
+        if not readerUI.web_wait_for_audio(audio_id):
+            return True
+        if not allow_playback:
+            return True
+        if index == len(audio_chunks) - 1 and delay_unless_interrupted(
+            None, max(0.01, end_offset)
+        ):
             return True
 
     return False
@@ -265,12 +266,22 @@ def delay_unless_interrupted(channel, duration):
     global playback_id
 
     start = time.monotonic()
+    channel_started = channel is None
     while time.monotonic() - start < duration:
         if allow_playback is False:
             return True
-        # Channel.get_busy() just tells us if the audio has stopped
-        # if channel is not None and not channel.get_busy():
-        #     return False
+        if channel is not None:
+            if channel.get_busy():
+                channel_started = True
+            elif channel_started:
+                return False
+        time.sleep(0.01)
+
+    # The duration is only a fallback for a channel that never started. Once
+    # the mixer has begun the clip, wait for its real end before advancing.
+    while channel is not None and channel_started and channel.get_busy():
+        if allow_playback is False:
+            return True
         time.sleep(0.01)
     return False
 

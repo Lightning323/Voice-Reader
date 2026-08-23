@@ -51,6 +51,14 @@ class _WebState:
         }
 
 
+@dataclass
+class _AudioWaiter:
+    """Synchronizes one browser clip with the playback thread."""
+
+    event: threading.Event = field(default_factory=threading.Event)
+    completed: bool = False
+
+
 class WebInterfaceServer:
     """Owns the browser server and the state shared with playback threads."""
 
@@ -63,6 +71,7 @@ class WebInterfaceServer:
         self._state = _WebState()
         self._listeners: list["queue.Queue"] = []
         self._audio: dict[str, tuple[bytes, float]] = {}
+        self._audio_waiters: dict[str, _AudioWaiter] = {}
 
     @property
     def is_running(self) -> bool:
@@ -121,9 +130,13 @@ class WebInterfaceServer:
             self._thread = None
             self._port = None
             self._audio.clear()
+            waiters = list(self._audio_waiters.values())
+            self._audio_waiters.clear()
             listeners = list(self._listeners)
             self._listeners.clear()
 
+        for waiter in waiters:
+            waiter.event.set()
         for listener in listeners:
             listener.put(None)
         if server is not None:
@@ -244,12 +257,17 @@ class WebInterfaceServer:
 
     def interrupt_audio(self) -> None:
         """Tell clients to immediately discard their current browser audio."""
+        with self._lock:
+            waiters = list(self._audio_waiters.values())
+            self._audio_waiters.clear()
+        for waiter in waiters:
+            waiter.event.set()
         self._broadcast("audio-stop", {})
 
-    def publish_wav(self, pcm: bytes, duration: float, volume: float) -> bool:
+    def publish_wav(self, pcm: bytes, duration: float, volume: float) -> Optional[str]:
         """Store a generated 24kHz mono WAV clip and tell connected clients."""
         if not self.is_running:
-            return False
+            return None
 
         audio_id = uuid.uuid4().hex
         output = io.BytesIO()
@@ -260,26 +278,58 @@ class WebInterfaceServer:
             wav.writeframes(pcm)
 
         with self._lock:
+            if not self._listeners:
+                return None
             # Prune old clips in case a client leaves mid-playback.
             now = time.monotonic()
             self._audio = {
                 key: value for key, value in self._audio.items() if now - value[1] < 300
             }
             self._audio[audio_id] = (output.getvalue(), now)
+            self._audio_waiters[audio_id] = _AudioWaiter()
         self._broadcast(
             "audio",
             {
+                "id": audio_id,
                 "url": f"/api/audio/{audio_id}.wav",
                 "duration": duration,
                 "volume": max(0.0, min(1.0, volume)),
             },
         )
-        return True
+        return audio_id
 
     def get_audio(self, audio_id: str) -> Optional[bytes]:
         with self._lock:
             item = self._audio.get(audio_id)
             return item[0] if item else None
+
+    def complete_audio(self, audio_id: str) -> bool:
+        """Record that the browser finished playing a specific clip."""
+        with self._lock:
+            waiter = self._audio_waiters.get(audio_id)
+            if waiter is None:
+                return False
+            waiter.completed = True
+            waiter.event.set()
+            return True
+
+    def wait_for_audio(self, audio_id: str) -> bool:
+        """Wait until the browser ends a clip, or reports/loses playback."""
+        with self._lock:
+            waiter = self._audio_waiters.get(audio_id)
+        if waiter is None:
+            return False
+
+        while not waiter.event.wait(timeout=0.1):
+            with self._lock:
+                if self._listeners:
+                    continue
+                self._audio_waiters.pop(audio_id, None)
+                return False
+
+        with self._lock:
+            self._audio_waiters.pop(audio_id, None)
+        return waiter.completed
 
     def add_listener(self, listener: "queue.Queue") -> None:
         with self._lock:
@@ -289,6 +339,12 @@ class WebInterfaceServer:
         with self._lock:
             if listener in self._listeners:
                 self._listeners.remove(listener)
+            if self._listeners:
+                return
+            waiters = list(self._audio_waiters.values())
+            self._audio_waiters.clear()
+        for waiter in waiters:
+            waiter.event.set()
 
     def schedule_control(self, payload: dict) -> tuple[bool, str]:
         action = payload.get("action")
@@ -372,6 +428,28 @@ class _WebRequestHandler(BaseHTTPRequestHandler):
         self._send(HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8", b"Not found")
 
     def do_POST(self) -> None:
+        if self.path == "/api/audio-complete":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if length > 1_000:
+                    raise ValueError("Request is too large.")
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                audio_id = payload.get("id") if isinstance(payload, dict) else None
+                if not isinstance(audio_id, str):
+                    raise ValueError("Audio id is required.")
+            except (UnicodeDecodeError, ValueError, json.JSONDecodeError) as error:
+                self._send(
+                    HTTPStatus.BAD_REQUEST,
+                    "application/json; charset=utf-8",
+                    json.dumps({"ok": False, "message": str(error)}).encode("utf-8"),
+                )
+                return
+            self._send(
+                HTTPStatus.OK,
+                "application/json; charset=utf-8",
+                json.dumps({"ok": self.web_interface.complete_audio(audio_id)}).encode("utf-8"),
+            )
+            return
         if self.path != "/api/control":
             self._send(HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8", b"Not found")
             return

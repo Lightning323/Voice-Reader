@@ -464,6 +464,11 @@ class VoiceReaderUI:
     def web_send_audio(self, pcm, duration, volume):
         if self.is_web_audio_active():
             return self.web_server.publish_wav(pcm, duration, volume)
+        return None
+
+    def web_wait_for_audio(self, audio_id):
+        if self.is_web_audio_active() and audio_id:
+            return self.web_server.wait_for_audio(audio_id)
         return False
 
     def web_interrupt_audio(self):
