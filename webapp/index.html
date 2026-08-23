@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
   <title>Voice Reader</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/regular/style.css">
   <style>
@@ -24,7 +24,34 @@
       --buffered: #40505f;
     }
 
+
+    .highlights mark.buffered {
+      background: #889aaf;
+    }
+
+    .highlights mark.playing {
+      background: #b58900;
+    }
+
+    .highlights mark.seek {
+      background: #1677d2;
+    }
+
+
     @media (prefers-color-scheme: dark) {
+
+    .highlights mark.buffered {
+      background: #536171;
+    }
+
+    .highlights mark.playing {
+      background: #886600;
+    }
+
+    .highlights mark.seek {
+      background: #1677d2;
+    }
+
       :root {
         color-scheme: dark;
 
@@ -118,18 +145,6 @@
     .highlights mark {
       color: transparent;
       border-radius: 2px;
-    }
-
-    .highlights mark.buffered {
-      background: #536171;
-    }
-
-    .highlights mark.playing {
-      background: #b58900;
-    }
-
-    .highlights mark.seek {
-      background: #1677d2;
     }
 
     textarea {
@@ -316,41 +331,273 @@
     #buffered {
       color: var(--buffered);
     }
+
+    /* Desktop-inspired browser workspace. */
+    :root {
+      --playing: #b58900;
+      --seek: #1677d2;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      overflow: hidden;
+      overscroll-behavior: none;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      gap: 10px;
+      width: 100%;
+      height: 100dvh;
+      margin: 0;
+      padding: 10px;
+    }
+
+    .toolbar,
+    .editor,
+    .details {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      padding: 8px;
+    }
+
+    .toolbar .controls {
+      display: flex;
+      flex: 1 1 auto;
+      flex-wrap: nowrap;
+      gap: 6px;
+      min-width: 0;
+      margin: 0;
+      overflow-x: auto;
+      scrollbar-width: thin;
+    }
+
+    .toolbar button {
+      flex: 0 0 auto;
+      border-radius: 5px;
+      padding: 8px 11px;
+      font-size: .9rem;
+      white-space: nowrap;
+    }
+
+    .toolbar-status {
+      flex: 0 1 15rem;
+      min-width: 0;
+      padding-left: 10px;
+      border-left: 1px solid var(--border);
+      color: var(--muted);
+      font-size: .86rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .toolbar-status strong {
+      color: var(--text);
+      font-weight: 650;
+    }
+
+    .workspace .editor {
+      position: relative;
+      min-height: 0;
+      height: auto;
+      margin: 0;
+      resize: none;
+      overflow: hidden;
+      border-color: var(--editor-border);
+      background: var(--editor);
+    }
+
+    .workspace .highlights,
+    .workspace textarea {
+      padding: 12px clamp(18px, 9vw, 10rem);
+    }
+
+    .workspace textarea {
+      color: var(--text);
+      caret-color: currentColor;
+    }
+
+    .highlights mark.playing {
+      background: var(--playing);
+    }
+
+    .highlights mark.seek {
+      background: var(--seek);
+    }
+
+    .details {
+      overflow: hidden;
+    }
+
+    .details-toggle {
+      width: 100%;
+      justify-content: space-between;
+      border-radius: 0;
+      background: transparent;
+      color: var(--muted);
+      padding: 8px 11px;
+    }
+
+    .details-toggle:hover {
+      background: var(--button-hover);
+      color: var(--text);
+    }
+
+    .details-toggle i {
+      transition: transform 150ms ease;
+    }
+
+    .details-toggle[aria-expanded="true"] i {
+      transform: rotate(180deg);
+    }
+
+    .details-panel {
+      display: grid;
+      grid-template-columns: minmax(9rem, .7fr) minmax(11rem, 1fr) minmax(14rem, 2fr);
+      gap: 10px;
+      max-height: min(34vh, 260px);
+      padding: 0 11px 11px;
+      overflow: auto;
+    }
+
+    .details-panel[hidden] {
+      display: none;
+    }
+
+    .detail-group {
+      min-width: 0;
+    }
+
+    .detail-label {
+      display: block;
+      margin: 0 0 4px;
+      color: var(--muted);
+      font-size: .73rem;
+      font-weight: 700;
+      letter-spacing: .07em;
+      text-transform: uppercase;
+    }
+
+    .detail-value {
+      display: block;
+      min-height: 1.5em;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      line-height: 1.45;
+    }
+
+    .details #current {
+      color: var(--playing);
+      font-size: 1rem;
+    }
+
+    .details #buffered,
+    .details .connection {
+      max-height: none;
+      margin: 0;
+      color: var(--muted);
+    }
+
+    @media (max-width: 600px) {
+      .workspace {
+        gap: 7px;
+        padding: 7px;
+      }
+
+      .toolbar {
+        gap: 0;
+        padding: 5px;
+      }
+
+      .toolbar .controls {
+        gap: 4px;
+      }
+
+      .toolbar .controls button {
+        flex: auto;
+        /* width: 40px; */
+        height: 40px;
+        min-width: 34px;
+        padding: 8px;
+      }
+
+      .button-label,
+      .toolbar-status {
+        display: none;
+      }
+
+      .workspace .highlights,
+      .workspace textarea {
+        padding-inline: 14px;
+      }
+
+      .details-panel {
+        grid-template-columns: 1fr;
+        max-height: 40vh;
+      }
+    }
   </style>
 </head>
 
 <body>
-  <main>
-    <h1>Voice Reader</h1>
-    <p class="subtle">Text and controls are connected to the desktop reader.</p>
-    <section class="panel">
-            <div class="controls" aria-label="Playback controls">
-        <button id="load"><i class="ph ph-file-arrow-up" aria-hidden="true"></i>Load text</button>
-        <button class="primary" data-action="play"><i class="ph ph-play" aria-hidden="true"></i>Play</button>
-        <button data-action="pause"><i class="ph ph-pause" aria-hidden="true"></i>Pause</button>
-        <button data-action="back"><i class="ph ph-skip-back" aria-hidden="true"></i>Back</button>
-        <button data-action="forward">Forward<i class="ph ph-skip-forward" aria-hidden="true"></i></button>
-        <button class="stop" data-action="stop"><i class="ph ph-stop" aria-hidden="true"></i>Stop</button>
+  <main class="workspace">
+    <section class="toolbar" aria-label="Playback controls">
+      <div class="controls">
+        <button id="load" title="Load text"><i class="ph ph-file-arrow-up" aria-hidden="true"></i><span class="button-label">Load</span></button>
+        <button id="play-pause" class="primary" data-action="play" title="Play" aria-label="Play"><i class="ph ph-play" aria-hidden="true"></i><span class="button-label">Play</span></button>
+        <button data-action="back" title="Back"><i class="ph ph-skip-back" aria-hidden="true"></i><span class="button-label">Back</span></button>
+        <button data-action="forward" title="Forward"><i class="ph ph-skip-forward" aria-hidden="true"></i><span class="button-label">Forward</span></button>
+        <button class="stop" data-action="stop" title="Stop"><i class="ph ph-stop" aria-hidden="true"></i><span class="button-label">Stop</span></button>
       </div>
-      <div class="editor">
-        <pre class="highlights" id="highlights" aria-hidden="true"></pre>
-        <textarea id="text" placeholder="Paste or type text to read…" spellcheck="true"></textarea>
-      </div>
-      <div style="margin: 18px;">
-        <div id="connection" class="connection">Connecting to desktop reader…</div>
+      <div class="toolbar-status" aria-live="polite">
+        <strong id="status">Idle</strong>
       </div>
     </section>
 
-    <section class="state" aria-live="polite">
-      <div class="stat"><label>Status</label><span id="status">Idle</span></div>
-      <div class="stat"><label>Voice</label><span id="voice">—</span></div>
+    <section class="editor" aria-label="Reader text">
+      <pre class="highlights" id="highlights" aria-hidden="true"></pre>
+      <textarea id="text" placeholder="Paste or type text to read…" spellcheck="true"></textarea>
     </section>
 
-    <section class="reading">
-      <article class="reading-card">
-        <h2>Currently Reading</h2>
-        <p id="current">Nothing is being read.</p>
-      </article>
+    <section class="details">
+      <button id="details-toggle" class="details-toggle" type="button" aria-controls="details-panel" aria-expanded="false">
+        <span>Show playback details</span><i class="ph ph-caret-up" aria-hidden="true"></i>
+      </button>
+      <div id="details-panel" class="details-panel" hidden>
+        <div class="detail-group">
+          <span class="detail-label">Character / status</span>
+          <span id="detail-status" class="detail-value">Idle</span>
+        </div>
+        <div class="detail-group">
+          <span class="detail-label">Voice</span>
+          <span id="voice" class="detail-value">—</span>
+        </div>
+        <div class="detail-group">
+          <span class="detail-label">Highlighted text</span>
+          <span id="current" class="detail-value">Nothing is being read.</span>
+        </div>
+        <div class="detail-group">
+          <span class="detail-label">Buffered next</span>
+          <span id="buffered" class="detail-value">The next generated text will appear here.</span>
+        </div>
+        <div class="detail-group">
+          <span class="detail-label">Connection</span>
+          <span id="connection" class="detail-value connection">Connecting to desktop reader…</span>
+        </div>
+      </div>
     </section>
   </main>
   <script>
@@ -360,7 +607,11 @@
     const voice = document.querySelector('#voice');
     const current = document.querySelector('#current');
     const buffered = document.querySelector('#buffered');
+    const detailStatus = document.querySelector('#detail-status');
     const connection = document.querySelector('#connection');
+    const detailsToggle = document.querySelector('#details-toggle');
+    const detailsPanel = document.querySelector('#details-panel');
+    const playPause = document.querySelector('#play-pause');
     let writingText = false;
     let audioQueue = [];
     let audioPlaying = false;
@@ -369,6 +620,7 @@
     let audioUnlockPromise = null;
     let audioEpoch = 0;
     let readingState = {};
+    let lastHighlightKey = '';
 
     async function send(payload) {
       try {
@@ -378,18 +630,36 @@
           body: JSON.stringify(payload),
         });
         if (!response.ok) throw new Error('The desktop reader did not accept the command.');
+        return true;
       } catch (error) {
         connection.textContent = error.message;
         connection.classList.remove('connected');
+        return false;
       }
+    }
+
+    function setPlayPauseButton(isPlaying) {
+      const action = isPlaying ? 'pause' : 'play';
+      const label = isPlaying ? 'Pause' : 'Play';
+      playPause.dataset.action = action;
+      playPause.title = label;
+      playPause.setAttribute('aria-label', label);
+      playPause.querySelector('i').className = `ph ph-${isPlaying ? 'pause' : 'play'}`;
+      playPause.querySelector('.button-label').textContent = label;
     }
 
     function render(state) {
       readingState = state;
       status.textContent = state.status || 'Idle';
+      detailStatus.textContent = state.status || 'Idle';
       voice.textContent = state.voice || '—';
       current.textContent = state.highlighted_text || 'Nothing is being read.';
       if (buffered) buffered.textContent = state.buffered_text || 'The next generated text will appear here.';
+      if (['Idle', 'Paused', 'Stopped', 'Web interface ready'].includes(state.status)) {
+        setPlayPauseButton(false);
+      } else if (state.highlighted_lines) {
+        setPlayPauseButton(true);
+      }
       if (!writingText && typeof state.text === 'string') text.value = state.text;
       renderTextareaHighlights();
     }
@@ -438,8 +708,30 @@
         cursor = range.end;
       }
       highlights.innerHTML = markup + escapeHtml(text.value.slice(cursor)) + '\n';
+      scrollToActiveHighlight();
       highlights.scrollTop = text.scrollTop;
       highlights.scrollLeft = text.scrollLeft;
+    }
+
+    function scrollToActiveHighlight() {
+      const seek = readingState.seek_lines;
+      const playing = readingState.highlighted_lines;
+      const active = seek || playing;
+      const highlightKey = active ? `${active.start_line}:${active.end_line}` : '';
+      if (!highlightKey || highlightKey === lastHighlightKey) {
+        lastHighlightKey = highlightKey;
+        return;
+      }
+      lastHighlightKey = highlightKey;
+
+      const target = highlights.querySelector('mark.seek, mark.playing');
+      if (!target) return;
+      const top = target.offsetTop;
+      const bottom = top + target.offsetHeight;
+      const visibleBottom = text.scrollTop + text.clientHeight;
+      if (top < text.scrollTop || bottom > visibleBottom) {
+        text.scrollTop = Math.max(0, top - (text.clientHeight - target.offsetHeight) / 2);
+      }
     }
 
     function unlockAudio() {
@@ -511,11 +803,17 @@
         const action = button.dataset.action;
         const control = { action, ...(action === 'play' ? { text: text.value } : {}) };
         if (action !== 'play') {
-          send(control);
+          send(control).then((sent) => {
+            if (sent && action === 'pause') setPlayPauseButton(false);
+            if (sent && action === 'stop') setPlayPauseButton(false);
+          });
           return;
         }
         unlockAudio()
           .then(() => send(control))
+          .then((sent) => {
+            if (sent) setPlayPauseButton(true);
+          })
           .catch((error) => {
             connection.textContent = `Audio could not be enabled: ${error.message}`;
             connection.classList.remove('connected');
@@ -528,6 +826,12 @@
     text.addEventListener('scroll', () => {
       highlights.scrollTop = text.scrollTop;
       highlights.scrollLeft = text.scrollLeft;
+    });
+    detailsToggle.addEventListener('click', () => {
+      const isOpen = detailsToggle.getAttribute('aria-expanded') === 'true';
+      detailsToggle.setAttribute('aria-expanded', String(!isOpen));
+      detailsPanel.hidden = isOpen;
+      detailsToggle.querySelector('span').textContent = isOpen ? 'Show playback details' : 'Hide playback details';
     });
 
     const events = new EventSource('/api/events');
