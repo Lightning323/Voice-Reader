@@ -4,6 +4,12 @@
     const highlights = $('#highlights');
     const search = $('#search');
     const toast = $('#toast');
+    const app = $('.app');
+    const mobileLayout = window.matchMedia('(max-width: 900px)');
+    const mobileTabs = [...document.querySelectorAll('.mobile-tab[data-mobile-view]')];
+    const mobileTextToolbar = $('#mobile-text-toolbar');
+    const mobileTextToolbarToggle = $('#mobile-text-toolbar-toggle');
+    const mobileTextToolbarContent = $('#mobile-text-toolbar-content');
     let state = {};
     let textTimer;
     let lastActiveRange = '';
@@ -154,7 +160,8 @@
       $('#mode').value = state.dialog_mode ? 'dialog' : 'reader';
       $('#mode').disabled = Boolean(state.playback_mode);
       const size = state.font_size || 12;
-      script.style.fontSize = `${size}px`; highlights.style.fontSize = `${size}px`; $('#font-size').textContent = `${size}px`;
+      script.style.fontSize = `${size}px`; highlights.style.fontSize = `${size}px`;
+      document.querySelectorAll('[data-font-size]').forEach((element) => { element.textContent = `${size}px`; });
       const server = state.server || {};
       const remoteSession = Boolean(server.remote);
       $('#server-toggle .button-label').textContent = remoteSession ? 'Web' : (server.running ? 'Stop' : 'Start');
@@ -244,8 +251,35 @@
     script.addEventListener('scroll', () => { highlights.scrollTop = script.scrollTop; highlights.scrollLeft = script.scrollLeft; });
     script.addEventListener('blur', () => bridge('set_text', script.value).catch(() => { }));
 
-    function openSearch() { search.classList.add('visible'); $('#search-query').focus(); }
-    function closeSearch() { search.classList.remove('visible'); lastActiveRange = ''; renderHighlights(); script.focus(); }
+    function setMobileTextToolbar(open) {
+      mobileTextToolbarToggle.setAttribute('aria-expanded', String(open));
+      mobileTextToolbarContent.hidden = !open;
+      mobileTextToolbar.classList.toggle('expanded', open);
+    }
+
+    function setMobileView(view) {
+      if (!['read', 'controls'].includes(view)) return;
+      app.dataset.mobileView = view;
+      mobileTabs.forEach((tab) => {
+        const selected = tab.dataset.mobileView === view;
+        tab.setAttribute('aria-selected', String(selected));
+        tab.tabIndex = selected ? 0 : -1;
+      });
+      if (view !== 'read') setMobileTextToolbar(false);
+    }
+
+    function openSearch() {
+      if (mobileLayout.matches) setMobileView('controls');
+      search.classList.add('visible');
+      requestAnimationFrame(() => $('#search-query').focus());
+    }
+    function closeSearch() {
+      search.classList.remove('visible');
+      lastActiveRange = '';
+      renderHighlights();
+      if (mobileLayout.matches) setMobileView('read');
+      requestAnimationFrame(() => script.focus());
+    }
     function findText() {
       const query = $('#search-query').value;
       if (!query) return;
@@ -261,8 +295,9 @@
     $('#search-query').addEventListener('keydown', (event) => { if (event.key === 'Enter') findText(); if (event.key === 'Escape') closeSearch(); });
     document.addEventListener('keydown', (event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') { event.preventDefault(); openSearch(); } });
     script.addEventListener('wheel', (event) => { if (event.ctrlKey || event.metaKey) { event.preventDefault(); bridge('change_font_size', event.deltaY < 0 ? 1 : -1); } }, { passive: false });
-    $('#font-down').addEventListener('click', () => bridge('change_font_size', -1));
-    $('#font-up').addEventListener('click', () => bridge('change_font_size', 1));
+    document.querySelectorAll('[data-font-size-change]').forEach((button) => {
+      button.addEventListener('click', () => bridge('change_font_size', Number(button.dataset.fontSizeChange)));
+    });
     $('#paste').addEventListener('click', async () => {
       try {
         const result = await bridge('read_clipboard');
@@ -295,6 +330,25 @@
     $('#character-voice').addEventListener('change', saveCharacter);
     $('#character-speed').addEventListener('change', saveCharacter);
     $('#character-volume').addEventListener('change', saveCharacter);
+
+    mobileTextToolbarToggle.addEventListener('click', () => {
+      setMobileTextToolbar(mobileTextToolbarContent.hidden);
+    });
+    mobileTabs.forEach((tab, index) => {
+      tab.addEventListener('click', () => setMobileView(tab.dataset.mobileView));
+      tab.addEventListener('keydown', (event) => {
+        if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+        event.preventDefault();
+        const next = mobileTabs[(index + (event.key === 'ArrowRight' ? 1 : -1) + mobileTabs.length) % mobileTabs.length];
+        setMobileView(next.dataset.mobileView);
+        next.focus();
+      });
+    });
+    const syncMobileLayout = () => {
+      if (!mobileLayout.matches) setMobileTextToolbar(false);
+    };
+    if (mobileLayout.addEventListener) mobileLayout.addEventListener('change', syncMobileLayout);
+    else mobileLayout.addListener(syncMobileLayout);
 
     const splitter = $('#splitter');
     splitter.addEventListener('pointerdown', (event) => {

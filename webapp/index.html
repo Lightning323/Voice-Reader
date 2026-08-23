@@ -16,7 +16,7 @@
       <p>The desktop bridge is starting.</p>
     </div>
   </div>
-  <div class="app">
+  <div class="app" data-mobile-view="read">
     <header class="toolbar">
       <div class="controls" aria-label="Playback controls">
         <button id="play" class="primary button-with-icon" title="Play"><i class="ph ph-play" aria-hidden="true"></i><span>Play</span></button>
@@ -35,11 +35,23 @@
     </header>
 
     <main class="workspace">
-      <section class="reader">
-
-
-
-
+      <section id="reader-view" class="reader" role="tabpanel" aria-labelledby="mobile-tab-read">
+        <div id="mobile-text-toolbar" class="mobile-text-toolbar">
+          <button id="mobile-text-toolbar-toggle" class="mobile-text-toolbar-toggle button-with-icon" type="button"
+            aria-expanded="false" aria-controls="mobile-text-toolbar-content">
+            <i class="ph ph-text-aa" aria-hidden="true"></i><span>Text options</span><i class="ph ph-caret-down"
+              aria-hidden="true"></i>
+          </button>
+          <div id="mobile-text-toolbar-content" class="mobile-text-toolbar-content" hidden>
+            <button class="icon" type="button" title="Decrease text size" aria-label="Decrease text size"
+              data-font-size-change="-1"><span class="icon-pair" aria-hidden="true"><i
+                  class="ph ph-text-aa"></i><i class="ph ph-minus"></i></span></button>
+            <span class="font-size-value" data-font-size>12px</span>
+            <button class="icon" type="button" title="Increase text size" aria-label="Increase text size"
+              data-font-size-change="1"><span class="icon-pair" aria-hidden="true"><i
+                  class="ph ph-text-aa"></i><i class="ph ph-plus"></i></span></button>
+          </div>
+        </div>
         <div class="editor" aria-label="Reader text">
           <pre id="highlights" class="highlights" aria-hidden="true"></pre>
           <textarea id="script" placeholder="Paste or type text to read…" spellcheck="true"></textarea>
@@ -47,13 +59,18 @@
       </section>
       <div id="splitter" class="splitter" role="separator" aria-label="Resize side panel" aria-orientation="vertical">
       </div>
-      <aside>
+      <aside id="controls-view" role="tabpanel" aria-labelledby="mobile-tab-controls">
 
         <section class="panel">
 
-          <div class="font-controls">
-            <button id="font-down" class="icon" title="Decrease text size" aria-label="Decrease text size"><span class="icon-pair" aria-hidden="true"><i class="ph ph-text-aa"></i><i class="ph ph-minus"></i></span></button>
-            <span id="font-size">12px</span><button id="font-up" class="icon" title="Increase text size" aria-label="Increase text size"><span class="icon-pair" aria-hidden="true"><i class="ph ph-text-aa"></i><i class="ph ph-plus"></i></span></button>
+          <div class="font-controls desktop-font-controls">
+            <button class="icon" type="button" title="Decrease text size" aria-label="Decrease text size"
+              data-font-size-change="-1"><span class="icon-pair" aria-hidden="true"><i
+                  class="ph ph-text-aa"></i><i class="ph ph-minus"></i></span></button>
+            <span class="font-size-value" data-font-size>12px</span><button class="icon" type="button"
+              title="Increase text size" aria-label="Increase text size" data-font-size-change="1"><span
+                class="icon-pair" aria-hidden="true"><i class="ph ph-text-aa"></i><i
+                  class="ph ph-plus"></i></span></button>
           </div>
           <div id="search" class="search">
             <input id="search-query" type="search" placeholder="Find in text" aria-label="Find in text">
@@ -96,6 +113,13 @@
         </section>
       </aside>
     </main>
+    <nav class="mobile-tabs" aria-label="Mobile views" role="tablist">
+      <button id="mobile-tab-read" class="mobile-tab" type="button" role="tab" aria-selected="true"
+        aria-controls="reader-view" data-mobile-view="read"><i class="ph ph-book-open-text" aria-hidden="true"></i><span>Read</span></button>
+      <button id="mobile-tab-controls" class="mobile-tab" type="button" role="tab" aria-selected="false"
+        aria-controls="controls-view" data-mobile-view="controls" tabindex="-1"><i class="ph ph-sliders-horizontal"
+          aria-hidden="true"></i><span>Controls</span></button>
+    </nav>
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="./main.js"></script>
