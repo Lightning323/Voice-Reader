@@ -388,7 +388,7 @@
     aside {
       min-height: 0;
       overflow: auto;
-      padding: 12px;
+      padding: 8px;
       background: var(--surface);
       display: flex;
       flex-direction: column;
@@ -568,7 +568,9 @@
 
 
       .app {
-        grid-template-rows: auto minmax(0, 1fr) auto;
+                  background: var(--surface);
+        --mobile-tabs-height: calc(50px + max(7px, env(safe-area-inset-bottom)));
+        grid-template-rows: auto minmax(0, 1fr);
         display: grid;
         height: var(--mobile-viewport-height, 100dvh);
         min-height: 0;
@@ -588,6 +590,7 @@
         display: block;
         height: auto;
         min-height: 0;
+        padding-bottom: var(--mobile-tabs-height);
         overflow: hidden;
       }
 
@@ -611,19 +614,36 @@
         display: block;
       }
 
+      .app[data-mobile-view="controls"] #controls-view {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+      }
+
       .mode {
         margin-left: 0;
       }
 
       .mobile-tabs {
+        position: fixed;
+        z-index: 10;
+        right: 0;
+        bottom: 0;
+        left: 0;
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 6px;
-        min-height: 0;
+        height: min-content;
         padding: 7px 10px max(7px, env(safe-area-inset-bottom));
         border-top: 1px solid var(--border);
         background: var(--surface);
         box-shadow: 0 -2px 7px var(--shadow);
+      }
+
+      .toast,
+      .offline {
+        bottom: calc(var(--mobile-tabs-height) + 12px);
       }
 
       .mobile-tab {
