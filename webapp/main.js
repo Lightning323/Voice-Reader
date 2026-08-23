@@ -5,7 +5,7 @@
     const search = $('#search');
     const toast = $('#toast');
     const app = $('.app');
-    const mobileLayout = window.matchMedia('(max-width: 900px)');
+    const mobileLayout = window.matchMedia('(max-width: 800px)');
     const mobileTabs = [...document.querySelectorAll('.mobile-tab[data-mobile-view]')];
     const toolbar = $('.toolbar');
     const readerSettings = $('#reader-settings');
@@ -62,6 +62,16 @@
       if (remoteMode) return remoteCall(method, ...args);
       if (!window.pywebview?.api?.[method]) return Promise.reject(new Error('The desktop bridge is unavailable.'));
       return window.pywebview.api[method](...args);
+    }
+
+    async function applyDesktopColorScheme() {
+      if (remoteMode) return;
+      try {
+        const { theme } = await bridge('get_color_scheme');
+        if (theme === 'dark' || theme === 'light') document.documentElement.dataset.colorScheme = theme;
+      } catch (_) {
+        // The browser's prefers-color-scheme result remains the fallback.
+      }
     }
 
     function notify(message, error = false) {
@@ -377,6 +387,20 @@
       });
     });
     window.addEventListener('resize', syncReaderSettingsLayout);
+    function syncMobileViewportHeight() {
+      if (!mobileLayout.matches) {
+        document.documentElement.style.removeProperty('--mobile-viewport-height');
+        return;
+      }
+      const height = window.visualViewport?.height || window.innerHeight;
+      document.documentElement.style.setProperty('--mobile-viewport-height', `${Math.round(height)}px`);
+    }
+    window.addEventListener('resize', syncMobileViewportHeight);
+    window.visualViewport?.addEventListener('resize', syncMobileViewportHeight);
+    window.visualViewport?.addEventListener('scroll', syncMobileViewportHeight);
+    if (mobileLayout.addEventListener) mobileLayout.addEventListener('change', syncMobileViewportHeight);
+    else mobileLayout.addListener(syncMobileViewportHeight);
+    syncMobileViewportHeight();
     syncReaderSettingsLayout();
 
     const splitter = $('#splitter');
@@ -425,6 +449,7 @@
       try {
         applyState(await bridge('get_state'));
         bridgeReady = true;
+        applyDesktopColorScheme();
         $('#offline').hidden = true;
         return true;
       } catch (error) {

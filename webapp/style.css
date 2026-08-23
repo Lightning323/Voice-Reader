@@ -36,6 +36,42 @@
       }
     }
 
+    :root[data-color-scheme="dark"] {
+      color-scheme: dark;
+      --page: #101419;
+      --surface: #1a2129;
+      --surface-raised: #212b36;
+      --editor: #0f151c;
+      --text: #edf2f7;
+      --muted: #9baaba;
+      --border: #2c3743;
+      --accent: #2589e6;
+      --accent-hover: #4b9fff;
+      --danger: #a33d49;
+      --generation: #536171;
+      --playing: #806000;
+      --seek: #1677d2;
+      --shadow: #00000028;
+    }
+
+    :root[data-color-scheme="light"] {
+      color-scheme: light;
+      --page: #edf2f6;
+      --surface: #ffffff;
+      --surface-raised: #f5f8fa;
+      --editor: #f8fafc;
+      --text: #18212b;
+      --muted: #5c6b7a;
+      --border: #cbd5df;
+      --accent: #1677d2;
+      --accent-hover: #2589e6;
+      --danger: #9f3540;
+      --generation: #d8e0e8;
+      --playing: #ffbf00;
+      --seek: #44a1ff;
+      --shadow: #17243314;
+    }
+
     * {
       box-sizing: border-box;
     }
@@ -246,7 +282,6 @@
     .workspace {
       display: grid;
       grid-template-columns: minmax(0, 1fr) 8px minmax(270px, var(--sidebar-width));
-      height: 100%;
       min-height: 0;
     }
 
@@ -521,6 +556,9 @@
       .controls button {
         flex: auto;
       }
+          #reader-settings-toggle{
+      margin-right: 0px;
+    }
     }
 
     @media (max-width: 800px) {
@@ -531,10 +569,11 @@
 
       .app {
         grid-template-rows: auto minmax(0, 1fr) auto;
-        height: 100%;
-        min-height: 100vh;
-                display: flex;
-        flex-direction: column;
+        display: grid;
+        height: var(--mobile-viewport-height, 100dvh);
+        min-height: 0;
+        max-height: var(--mobile-viewport-height, 100dvh);
+        overflow: hidden;
       }
 
       .app[data-mobile-view="controls"] .toolbar {
@@ -547,19 +586,13 @@
 
       .workspace {
         display: block;
-        height: 100%;
+        height: auto;
         min-height: 0;
         overflow: hidden;
       }
 
       .splitter {
         display: none;
-      }
-
-      .reader {
-        position: relative;
-        height: 100%;
-        min-height: 0;
       }
 
       aside {
@@ -586,7 +619,8 @@
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 6px;
-        padding: 7px 10px calc(7px + env(safe-area-inset-bottom));
+        min-height: 0;
+        padding: 7px 10px max(7px, env(safe-area-inset-bottom));
         border-top: 1px solid var(--border);
         background: var(--surface);
         box-shadow: 0 -2px 7px var(--shadow);

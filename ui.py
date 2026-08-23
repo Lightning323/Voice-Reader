@@ -71,6 +71,10 @@ class _DesktopBridge:
         """Read the desktop clipboard without requesting browser permission."""
         return self._app.read_clipboard()
 
+    def get_color_scheme(self) -> dict[str, str]:
+        """Return the desktop color scheme for the local web view."""
+        return {"theme": self._app.system_color_scheme()}
+
     def control(self, action: str, text: Optional[str] = None) -> dict[str, Any]:
         if action not in {"load", "play", "pause", "stop", "back", "forward"}:
             return {"ok": False, "message": "Unknown control."}
@@ -312,6 +316,46 @@ class VoiceReaderUI:
             "ok": False,
             "message": "Clipboard access is unavailable. Click in the editor and use Ctrl+V.",
         }
+
+    @staticmethod
+    def system_color_scheme() -> str:
+        """Find the OS color scheme when QtWebEngine does not expose it to CSS."""
+        if sys.platform.startswith("linux"):
+            for command in (
+                ["gsettings", "get", "org.gnome.desktop.interface", "color-scheme"],
+                ["gsettings", "get", "org.gnome.desktop.interface", "gtk-theme"],
+            ):
+                try:
+                    result = subprocess.run(
+                        command,
+                        capture_output=True,
+                        check=False,
+                        encoding="utf-8",
+                        errors="replace",
+                        timeout=1,
+                    )
+                except (FileNotFoundError, subprocess.TimeoutExpired):
+                    continue
+                value = result.stdout.lower()
+                if "dark" in value:
+                    return "dark"
+                if "light" in value:
+                    return "light"
+
+            if "dark" in os.environ.get("GTK_THEME", "").lower():
+                return "dark"
+
+        try:
+            from PyQt6.QtGui import QGuiApplication
+
+            scheme = QGuiApplication.styleHints().colorScheme()
+            name = str(getattr(scheme, "name", scheme)).lower()
+            if name in {"dark", "light"}:
+                return name
+        except (ImportError, RuntimeError, AttributeError):
+            pass
+
+        return ""
 
     def get_script_contents(self) -> str:
         with self._lock:
