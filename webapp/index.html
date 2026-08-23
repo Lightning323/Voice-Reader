@@ -22,9 +22,10 @@
       --button: #dce4ec;
       --button-hover: #cbd6e0;
       --button-text: #18212b;
-      --buffered: #40505f;
     }
 
+
+    /*Buttons*/
     button:hover {
       background: #43566b;
     }
@@ -40,10 +41,20 @@
        color:white;
     }
 
+      button.stop:hover {
+      background: #bd4653;
+    }
 
+     button.primary:hover {
+      background: #2589e6;
+    }
+
+
+
+    /*Highlight colors*/
 
     .highlights mark.buffered {
-      background: #a3b8cf;
+      background: #bfd2e9;
     }
 
     .highlights mark.playing {
@@ -52,23 +63,10 @@
 
     .highlights mark.seek {
       background: #1677d2;
-    }
+    } 
 
-     button.stop:hover {
-      background: #bd4653;
-    }
-
-     button.primary:hover {
-      background: #2589e6;
-    }
-
+   
     @media (prefers-color-scheme: dark) {
-
-
-   
-
-   
-
       .highlights mark.buffered {
         background: #536171;
       }
@@ -94,7 +92,6 @@
         --button: #334152;
         --button-hover: #43566b;
         --button-text: #f5f8fc;
-        --buffered: #c5d2df;
       }
     }
 
@@ -339,9 +336,7 @@
       background: var(--button-hover);
     }
 
-    #buffered {
-      color: var(--buffered);
-    }
+ 
 
     /* Desktop-inspired browser workspace. */
     :root {
@@ -442,13 +437,7 @@
       caret-color: currentColor;
     }
 
-    .highlights mark.playing {
-      background: var(--playing);
-    }
 
-    .highlights mark.seek {
-      background: var(--seek);
-    }
 
     .details {
       overflow: hidden;
@@ -460,7 +449,7 @@
       border-radius: 0;
       background: transparent;
       color: var(--muted);
-      border: 1px solid gray;
+      border: 1px solid var(--border);
       padding: 8px 11px;
     }
 
