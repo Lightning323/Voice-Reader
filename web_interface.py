@@ -19,12 +19,30 @@ import wave
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Callable, Optional
+from urllib.parse import urlsplit
 
 
 def _resource_path(*parts: str) -> str:
     """Find browser assets in source runs and PyInstaller bundles."""
     base = getattr(sys, "_MEIPASS", os.path.dirname(__file__))
     return os.path.join(base, *parts)
+
+
+# The desktop UI reads these files directly from disk. The sharing server uses
+# this explicit allowlist so it exposes the same local assets without serving
+# arbitrary files from the application bundle.
+_STATIC_ASSETS = {
+    "/style.css": (("webapp", "style.css"), "text/css; charset=utf-8"),
+    "/main.js": (("webapp", "main.js"), "application/javascript; charset=utf-8"),
+    "/vendor/phosphor-icons/regular/style.css": (
+        ("webapp", "vendor", "phosphor-icons", "regular", "style.css"),
+        "text/css; charset=utf-8",
+    ),
+    "/vendor/phosphor-icons/regular/Phosphor.woff2": (
+        ("webapp", "vendor", "phosphor-icons", "regular", "Phosphor.woff2"),
+        "font/woff2",
+    ),
+}
 
 
 
@@ -489,6 +507,17 @@ class _WebRequestHandler(BaseHTTPRequestHandler):
             self._send(
                 HTTPStatus.OK, "text/html; charset=utf-8", page.encode("utf-8")
             )
+            return
+        asset = _STATIC_ASSETS.get(urlsplit(self.path).path)
+        if asset is not None:
+            parts, content_type = asset
+            try:
+                with open(_resource_path(*parts), "rb") as file:
+                    content = file.read()
+            except OSError:
+                self._send(HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8", b"Not found")
+            else:
+                self._send(HTTPStatus.OK, content_type, content)
             return
         if self.path == "/api/state":
             self._send(
