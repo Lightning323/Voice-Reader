@@ -25,6 +25,22 @@
       --buffered: #40505f;
     }
 
+    button:hover {
+      background: #43566b;
+    }
+
+    button.primary {
+      background: #1677d2;
+      color:white;
+    }
+
+
+    button.stop {
+      background: #9f3540;
+       color:white;
+    }
+
+
 
     .highlights mark.buffered {
       background: #a3b8cf;
@@ -38,8 +54,20 @@
       background: #1677d2;
     }
 
+     button.stop:hover {
+      background: #bd4653;
+    }
+
+     button.primary:hover {
+      background: #2589e6;
+    }
 
     @media (prefers-color-scheme: dark) {
+
+
+   
+
+   
 
       .highlights mark.buffered {
         background: #536171;
@@ -190,25 +218,7 @@
       line-height: 1;
     }
 
-    button:hover {
-      background: #43566b;
-    }
 
-    button.primary {
-      background: #1677d2;
-    }
-
-    button.primary:hover {
-      background: #2589e6;
-    }
-
-    button.stop {
-      background: #9f3540;
-    }
-
-    button.stop:hover {
-      background: #bd4653;
-    }
 
     .state {
       display: grid;
@@ -450,6 +460,7 @@
       border-radius: 0;
       background: transparent;
       color: var(--muted);
+      border: 1px solid gray;
       padding: 8px 11px;
     }
 
@@ -471,7 +482,7 @@
       grid-template-columns: minmax(9rem, .7fr) minmax(11rem, 1fr) minmax(14rem, 2fr);
       gap: 10px;
       max-height: min(34vh, 260px);
-      padding: 0 11px 11px;
+      padding: 18px;
       overflow: auto;
     }
 
