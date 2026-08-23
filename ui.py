@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 import sys
 import threading
 from ctypes.util import find_library
@@ -65,6 +66,10 @@ class _DesktopBridge:
             return {"ok": False, "message": "Text must be a string."}
         self._app.set_script_contents(text)
         return {"ok": True}
+
+    def read_clipboard(self) -> dict[str, Any]:
+        """Read the desktop clipboard without requesting browser permission."""
+        return self._app.read_clipboard()
 
     def control(self, action: str, text: Optional[str] = None) -> dict[str, Any]:
         if action not in {"load", "play", "pause", "stop", "back", "forward"}:
@@ -258,6 +263,42 @@ class VoiceReaderUI:
         if self.web_server and self.web_server.is_running:
             self.web_server.update_state(text=text)
         self._publish_state()
+
+    @staticmethod
+    def read_clipboard() -> dict[str, Any]:
+        """Return clipboard text using the host OS instead of WebEngine APIs."""
+        if sys.platform.startswith("win"):
+            commands = [["powershell", "-NoProfile", "-Command", "Get-Clipboard", "-Raw"]]
+        elif sys.platform == "darwin":
+            commands = [["pbpaste"]]
+        else:
+            commands = []
+            if os.environ.get("WAYLAND_DISPLAY"):
+                commands.append(["wl-paste", "--no-newline"])
+            commands.extend(
+                [
+                    ["xclip", "-selection", "clipboard", "-o"],
+                    ["xsel", "--clipboard", "--output"],
+                ]
+            )
+
+        for command in commands:
+            try:
+                result = subprocess.run(
+                    command,
+                    capture_output=True,
+                    check=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=3,
+                )
+                return {"ok": True, "text": result.stdout}
+            except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+                continue
+        return {
+            "ok": False,
+            "message": "Clipboard access is unavailable. Click in the editor and use Ctrl+V.",
+        }
 
     def get_script_contents(self) -> str:
         with self._lock:
@@ -516,6 +557,8 @@ class VoiceReaderUI:
                 "pywebview is required. Install the project requirements and run again."
             ) from error
 
+        self._patch_qt_permission_handler()
+
         page = resource_path("webapp", "desktop.html")
         self._window = webview.create_window(
             "Voice Reader",
@@ -532,3 +575,38 @@ class VoiceReaderUI:
             webview.start(gui="qt", http_server=False)
         finally:
             self._notify_shutdown()
+
+    @staticmethod
+    def _patch_qt_permission_handler() -> None:
+        """Fix pywebview 6.2's callback for recent PyQt6 permission enums.
+
+        pywebview currently passes the old integer constants to
+        ``setFeaturePermission``. PyQt6 6.11 requires ``PermissionPolicy``
+        enum values and otherwise aborts the entire desktop process when a
+        clipboard or media permission is requested.
+        """
+        try:
+            from webview.platforms import qt
+        except ImportError:
+            return
+
+        page_type = qt.QWebPage
+        policy_type = getattr(page_type, "PermissionPolicy", None)
+        if policy_type is None:
+            return
+
+        media_features = {
+            page_type.Feature.MediaAudioCapture,
+            page_type.Feature.MediaVideoCapture,
+            page_type.Feature.MediaAudioVideoCapture,
+        }
+
+        def on_feature_permission_requested(page, origin, feature):
+            policy = (
+                policy_type.PermissionGrantedByUser
+                if feature in media_features
+                else policy_type.PermissionDeniedByUser
+            )
+            page.setFeaturePermission(origin, feature, policy)
+
+        qt.BrowserView.WebPage.onFeaturePermissionRequested = on_feature_permission_requested

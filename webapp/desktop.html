@@ -79,7 +79,7 @@
     }
     label { color: var(--muted); font-size: .78rem; font-weight: 650; letter-spacing: .035em; }
 
-    .app { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100%; }
+    .app { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100%; min-height: 100vh; }
     .toolbar {
       display: flex;
       align-items: center;
@@ -97,14 +97,15 @@
     .mode { display: flex; align-items: center; gap: 7px; margin-left: auto; min-width: 184px; }
     .status { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
 
-    .workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(292px, 350px); min-height: 0; }
-    .reader { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; padding: 12px; gap: 8px; }
+    .workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(292px, 350px); height: 100%; min-height: 0; }
+    .reader { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; height: 100%; padding: 12px; gap: 8px; }
     .search { display: none; align-items: center; gap: 7px; }
     .search.visible { display: flex; }
     .search input { max-width: 560px; }
     .editor {
       position: relative;
-      min-height: 0;
+      min-height: 160px;
+      height: 100%;
       overflow: hidden;
       border: 1px solid var(--border);
       border-radius: 8px;
@@ -127,12 +128,12 @@
       white-space: pre-wrap;
       overflow-wrap: break-word;
     }
-    .highlights { pointer-events: none; overflow: hidden; color: transparent; }
+    .highlights { z-index: 0; pointer-events: none; overflow: hidden; color: transparent; }
     .highlights mark { color: transparent; border-radius: 2px; }
     .highlights mark.generation { background: var(--generation); }
     .highlights mark.playing { background: var(--playing); }
     .highlights mark.seek { background: var(--seek); }
-    #script { resize: none; outline: none; background: transparent; color: var(--text); caret-color: var(--text); overflow: auto; }
+    #script { z-index: 1; display: block; resize: none; outline: none; background: transparent; color: var(--text); caret-color: var(--text); overflow: auto; }
     #script:focus { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent), transparent 20%); }
 
     aside { min-height: 0; overflow: auto; padding: 12px; border-left: 1px solid var(--border); background: var(--surface); }
@@ -156,7 +157,9 @@
     .toast { position: fixed; z-index: 5; right: 20px; bottom: 20px; max-width: 360px; padding: 10px 13px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); box-shadow: 0 8px 28px var(--shadow); opacity: 0; transform: translateY(12px); pointer-events: none; transition: 150ms ease; }
     .toast.show { opacity: 1; transform: translateY(0); }
     .toast.error { border-color: var(--danger); }
-    .offline { position: fixed; inset: 0; z-index: 6; display: grid; place-items: center; padding: 24px; background: var(--page); text-align: center; }
+    .offline { position: fixed; right: 20px; bottom: 20px; z-index: 6; max-width: 360px; padding: 10px 13px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); box-shadow: 0 8px 28px var(--shadow); color: var(--muted); }
+    .offline h1 { margin: 0 0 3px; color: var(--text); font-size: .95rem; }
+    .offline p { margin: 0; font-size: .84rem; }
     .offline[hidden] { display: none; }
 
     @media (max-width: 900px) {
@@ -173,7 +176,7 @@
 </head>
 
 <body>
-  <div id="offline" class="offline">
+  <div id="offline" class="offline" hidden>
     <div><h1>Loading Voice Reader…</h1><p>The desktop bridge is starting.</p></div>
   </div>
   <div class="app">
@@ -416,9 +419,10 @@
     $('#font-up').addEventListener('click', () => bridge('change_font_size', 1));
     $('#paste').addEventListener('click', async () => {
       try {
-        const pasted = await navigator.clipboard.readText();
-        script.value = pasted; renderHighlights(); await bridge('set_text', pasted);
-      } catch (_) { notify('Clipboard access was unavailable. Use Ctrl+V in the editor instead.', true); script.focus(); }
+        const result = await bridge('read_clipboard');
+        if (!result.ok) throw new Error(result.message);
+        script.value = result.text; renderHighlights(); await bridge('set_text', result.text);
+      } catch (error) { notify(error.message || 'Clipboard access was unavailable. Use Ctrl+V in the editor instead.', true); script.focus(); }
     });
     $('#server-toggle').addEventListener('click', async () => {
       try { const result = await bridge('toggle_server', $('#server-port').value); if (!result.ok) notify(result.message || 'Sharing could not be started.', true); }
@@ -446,10 +450,27 @@
     $('#character-speed').addEventListener('change', saveCharacter);
     $('#character-volume').addEventListener('change', saveCharacter);
 
-    window.addEventListener('pywebviewready', async () => {
-      try { applyState(await bridge('get_state')); $('#offline').hidden = true; }
-      catch (error) { $('#offline').querySelector('p').textContent = error.message; }
-    });
+    let bridgeReady = false;
+    async function initializeBridge() {
+      if (bridgeReady || !window.pywebview?.api?.get_state) return false;
+      try {
+        applyState(await bridge('get_state'));
+        bridgeReady = true;
+        $('#offline').hidden = true;
+        return true;
+      } catch (error) {
+        $('#offline').querySelector('p').textContent = error.message;
+        $('#offline').hidden = false;
+        return false;
+      }
+    }
+    window.addEventListener('pywebviewready', initializeBridge);
+    const bridgePoll = setInterval(async () => {
+      if (await initializeBridge()) clearInterval(bridgePoll);
+    }, 100);
+    setTimeout(() => {
+      if (!bridgeReady) $('#offline').hidden = false;
+    }, 1200);
   </script>
 </body>
 </html>
