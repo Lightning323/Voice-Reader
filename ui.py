@@ -444,14 +444,18 @@ class VoiceReaderUI:
         if self.is_web_audio_active():
             self.web_server.begin_buffering(text)
 
-    def web_add_buffered_line(self, text, voice):
+    def web_add_buffered_line(self, text, voice, start_line, end_line):
         if self.is_web_audio_active():
-            return self.web_server.add_buffered_line(text, voice)
+            return self.web_server.add_buffered_line(
+                text, voice, start_line, end_line
+            )
         return None
 
-    def web_start_line(self, item_id, text, voice):
+    def web_start_line(self, item_id, text, voice, start_line, end_line):
         if self.is_web_audio_active():
-            self.web_server.start_line(item_id, text, voice)
+            self.web_server.start_line(
+                item_id, text, voice, start_line, end_line
+            )
 
     def web_send_audio(self, pcm, duration, volume):
         if self.is_web_audio_active():

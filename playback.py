@@ -172,7 +172,11 @@ def playback_thread(readerUI):
                     readerUI.log(f'{sample.line.character}: {speed_info}"{sample.line.text}"')
                     readerUI.set_status(f"{sample.line.character}")
                     readerUI.web_start_line(
-                        sample.web_item_id, sample.line.text, sample.web_voice
+                        sample.web_item_id,
+                        sample.line.text,
+                        sample.web_voice,
+                        sample.line.start,
+                        sample.line.end,
                     )
                 #print("Playing... ", playback_index, sample.line, sample.volume_multiplier)
                 playing_index = playback_index

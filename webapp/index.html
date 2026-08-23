@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Voice Reader</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/regular/style.css">
+  <style>
+:root {
+  color-scheme: light;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+
+  --page: #f4f7fa;
+  --text: #18212b;
+  --muted: #5d6b79;
+  --surface: #ffffff;
+  --border: #cbd5df;
+  --editor-border: #aab7c3;
+  --editor: #f8fafc;
+  --button: #dce4ec;
+  --button-hover: #cbd6e0;
+  --button-text: #18212b;
+  --buffered: #40505f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --page: #101419;
+    --text: #edf2f7;
+    --muted: #98a6b5;
+    --surface: #1a2129;
+    --border: #2c3743;
+    --editor-border: #425263;
+    --editor: #0f151c;
+    --button: #334152;
+    --button-hover: #43566b;
+    --button-text: #f5f8fc;
+    --buffered: #c5d2df;
+  }
+}
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #101419;
+      color: #edf2f7;
+    }
+
+    main {
+      width: min(960px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 32px 0 48px;
+    }
+
+    h1 {
+      margin: 0 0 4px;
+      font-size: 1.8rem;
+    }
+
+    .subtle {
+      margin: 0 0 24px;
+      color: #98a6b5;
+    }
+
+    .panel,
+    .reading-card {
+      background: #1a2129;
+      border: 1px solid #2c3743;
+      border-radius: 12px;
+      box-shadow: 0 8px 26px #00000020;
+    }
+
+    .reading-card {
+      padding: 18px;
+    }
+
+    .editor {
+      position: relative;
+      margin-bottom: 18px;
+      height: 80vh;
+      min-height: 265px;
+      resize: vertical;
+      overflow: hidden;
+      border: 1px solid #425263;
+      border-radius: 8px;
+      background: #0f151c;
+    }
+
+    .highlights,
+    textarea {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 13px;
+      border: 0;
+      font: 1rem/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      letter-spacing: normal;
+      tab-size: 4;
+      white-space: pre-wrap;
+      overflow-wrap: break-word;
+    }
+
+    .highlights {
+      overflow: hidden;
+      pointer-events: none;
+      color: transparent;
+    }
+
+    .highlights mark {
+      color: transparent;
+      border-radius: 2px;
+    }
+
+    .highlights mark.buffered {
+      background: #536171;
+    }
+
+    .highlights mark.playing {
+      background: #b58900;
+    }
+
+    textarea {
+      display: block;
+      resize: none;
+      outline: none;
+      background: transparent;
+      color: #edf2f7;
+      caret-color: #ffffff;
+      overflow: auto;
+    }
+
+    textarea:focus {
+      outline: 2px solid #4b9fff;
+      outline-offset: -2px;
+    }
+
+    .controls {
+      display: flex;
+      margin: 18px;
+      flex-wrap: wrap;
+      gap: 9px;
+      margin-top: 14px;
+    }
+
+    button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      border: 0;
+      border-radius: 7px;
+      background: #334152;
+      color: #f5f8fc;
+      padding: 10px 15px;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    button i {
+      font-size: 1.12rem;
+      line-height: 1;
+    }
+
+    button:hover {
+      background: #43566b;
+    }
+
+    button.primary {
+      background: #1677d2;
+    }
+
+    button.primary:hover {
+      background: #2589e6;
+    }
+
+    button.stop {
+      background: #9f3540;
+    }
+
+    button.stop:hover {
+      background: #bd4653;
+    }
+
+    .state {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin: 18px 0;
+    }
+
+    .stat {
+      background: #1a2129;
+      border: 1px solid #2c3743;
+      border-radius: 10px;
+      padding: 12px 14px;
+    }
+
+    .stat label,
+    .reading-card h2 {
+      display: block;
+      margin: 0 0 5px;
+      color: #9baaba;
+      font-size: .78rem;
+      font-weight: 700;
+      letter-spacing: .07em;
+      text-transform: uppercase;
+    }
+
+    .stat span {
+      font-weight: 650;
+      overflow-wrap: anywhere;
+    }
+
+    .reading {
+      display: grid;
+      gap: 12px;
+    }
+
+    .reading-card h2 {
+      margin-bottom: 10px;
+    }
+
+    .reading-card p {
+      margin: 0;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      line-height: 1.55;
+    }
+
+    #current {
+      color: #ffd166;
+      font-size: 1.08rem;
+    }
+
+    #buffered {
+      color: #c5d2df;
+      max-height: 180px;
+      overflow: auto;
+    }
+
+    .connection {
+      font-size: .88rem;
+      margin: 18px;
+      color: #9baaba;
+      margin-top: 14px;
+    }
+
+    .connection.connected {
+      color: #70d6a2;
+    }
+
+    @media (max-width: 600px) {
+      main {
+        width: min(100% - 22px, 960px);
+        padding-top: 20px;
+      }
+
+      .state {
+        grid-template-columns: 1fr;
+      }
+
+      button {
+        flex: 1 1 auto;
+      }
+    }
+
+    body {
+  background: var(--page);
+  color: var(--text);
+}
+
+.subtle,
+.connection,
+.stat label,
+.reading-card h2 {
+  color: var(--muted);
+}
+
+.panel,
+.reading-card,
+.stat {
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+.editor {
+  background: var(--editor);
+  border-color: var(--editor-border);
+}
+
+textarea {
+  color: var(--text);
+}
+
+button {
+  background: var(--button);
+  color: var(--button-text);
+}
+
+button:hover {
+  background: var(--button-hover);
+}
+
+#buffered {
+  color: var(--buffered);
+}
+  </style>
+</head>
+
+<body>
+  <main>
+    <h1>Voice Reader</h1>
+    <p class="subtle">Text and controls are connected to the desktop reader.</p>
+    <section class="panel">
+      <div class="editor">
+        <pre class="highlights" id="highlights" aria-hidden="true"></pre>
+        <textarea id="text" placeholder="Paste or type text to read…" spellcheck="true"></textarea>
+      </div>
+      <div class="controls" aria-label="Playback controls">
+        <button id="load"><i class="ph ph-file-arrow-up" aria-hidden="true"></i>Load text</button>
+        <button class="primary" data-action="play"><i class="ph ph-play" aria-hidden="true"></i>Play</button>
+        <button data-action="pause"><i class="ph ph-pause" aria-hidden="true"></i>Pause</button>
+        <button data-action="back"><i class="ph ph-skip-back" aria-hidden="true"></i>Back</button>
+        <button data-action="forward">Forward<i class="ph ph-skip-forward" aria-hidden="true"></i></button>
+        <button class="stop" data-action="stop"><i class="ph ph-stop" aria-hidden="true"></i>Stop</button>
+      </div>
+      <div id="connection" class="connection">Connecting to desktop reader…</div>
+    </section>
+
+    <section class="state" aria-live="polite">
+      <div class="stat"><label>Status</label><span id="status">Idle</span></div>
+      <div class="stat"><label>Voice</label><span id="voice">—</span></div>
+    </section>
+
+    <section class="reading">
+      <article class="reading-card">
+        <h2>Currently Reading</h2>
+        <p id="current">Nothing is being read.</p>
+      </article>
+    </section>
+  </main>
+  <script>
+    const text = document.querySelector('#text');
+    const highlights = document.querySelector('#highlights');
+    const status = document.querySelector('#status');
+    const voice = document.querySelector('#voice');
+    const current = document.querySelector('#current');
+    const buffered = document.querySelector('#buffered');
+    const connection = document.querySelector('#connection');
+    let writingText = false;
+    let audioQueue = [];
+    let audioPlaying = false;
+    let currentSource = null;
+    let audioContext = null;
+    let audioEpoch = 0;
+    let readingState = {};
+
+    async function send(payload) {
+      try {
+        const response = await fetch('/api/control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) throw new Error('The desktop reader did not accept the command.');
+      } catch (error) {
+        connection.textContent = error.message;
+        connection.classList.remove('connected');
+      }
+    }
+
+    function render(state) {
+      readingState = state;
+      status.textContent = state.status || 'Idle';
+      voice.textContent = state.voice || '—';
+      current.textContent = state.highlighted_text || 'Nothing is being read.';
+      buffered.textContent = state.buffered_text || 'The next generated text will appear here.';
+      if (!writingText && typeof state.text === 'string') text.value = state.text;
+      renderTextareaHighlights();
+    }
+
+    function escapeHtml(value) {
+      return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+    }
+
+    function offsetsForLines(lineRange) {
+      if (!lineRange || !lineRange.start_line || !lineRange.end_line) return null;
+      const lines = text.value.split('\n');
+      const startLine = Math.max(1, lineRange.start_line);
+      const endLine = Math.min(lines.length, lineRange.end_line);
+      if (startLine > lines.length || endLine < startLine) return null;
+      let start = 0;
+      for (let index = 0; index < startLine - 1; index += 1) start += lines[index].length + 1;
+      let end = start;
+      for (let index = startLine - 1; index < endLine; index += 1) {
+        end += lines[index].length;
+        if (index < endLine - 1) end += 1;
+      }
+      return { start, end };
+    }
+
+    function renderTextareaHighlights() {
+      const ranges = [];
+      for (const item of readingState.buffered_lines || []) {
+        const offsets = offsetsForLines(item);
+        if (offsets && offsets.end > offsets.start) ranges.push({ ...offsets, type: 'buffered' });
+      }
+      const current = offsetsForLines(readingState.highlighted_lines);
+      if (current && current.end > current.start) ranges.push({ ...current, type: 'playing' });
+      ranges.sort((a, b) => a.start - b.start || (a.type === 'playing' ? 1 : -1));
+
+      let cursor = 0;
+      let markup = '';
+      for (const range of ranges) {
+        if (range.start < cursor) continue;
+        markup += escapeHtml(text.value.slice(cursor, range.start));
+        markup += `<mark class="${range.type}">${escapeHtml(text.value.slice(range.start, range.end))}</mark>`;
+        cursor = range.end;
+      }
+      highlights.innerHTML = markup + escapeHtml(text.value.slice(cursor)) + '\n';
+      highlights.scrollTop = text.scrollTop;
+      highlights.scrollLeft = text.scrollLeft;
+    }
+
+    function unlockAudio() {
+      if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioContext.state === 'suspended') audioContext.resume();
+    }
+
+    async function playNextAudio() {
+      if (audioPlaying || !audioQueue.length) return;
+      const item = audioQueue.shift();
+      const epoch = audioEpoch;
+      audioPlaying = true;
+      try {
+        if (!audioContext) unlockAudio();
+        const response = await fetch(item.url);
+        if (!response.ok) throw new Error('Audio clip expired.');
+        const clip = await audioContext.decodeAudioData(await response.arrayBuffer());
+        if (epoch !== audioEpoch) return;
+        const source = audioContext.createBufferSource();
+        const gain = audioContext.createGain();
+        source.buffer = clip;
+        gain.gain.value = item.volume;
+        source.connect(gain).connect(audioContext.destination);
+        currentSource = source;
+        source.onended = () => {
+          if (epoch !== audioEpoch) return;
+          if (currentSource === source) currentSource = null;
+          audioPlaying = false;
+          playNextAudio();
+        };
+        source.start();
+      } catch (error) {
+        if (epoch !== audioEpoch) return;
+        audioPlaying = false;
+        playNextAudio();
+      }
+    }
+
+    function queueAudio(item) {
+      audioQueue.push(item);
+      playNextAudio();
+    }
+
+    document.querySelector('#load').addEventListener('click', () => send({ action: 'load', text: text.value }));
+    document.querySelectorAll('[data-action]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const action = button.dataset.action;
+        unlockAudio();
+        send({ action, ...(action === 'play' ? { text: text.value } : {}) });
+      });
+    });
+    text.addEventListener('focus', () => writingText = true);
+    text.addEventListener('blur', () => writingText = false);
+    text.addEventListener('input', renderTextareaHighlights);
+    text.addEventListener('scroll', () => {
+      highlights.scrollTop = text.scrollTop;
+      highlights.scrollLeft = text.scrollLeft;
+    });
+
+    const events = new EventSource('/api/events');
+    events.addEventListener('state', (event) => render(JSON.parse(event.data)));
+    events.addEventListener('audio', (event) => queueAudio(JSON.parse(event.data)));
+    events.addEventListener('audio-stop', () => {
+      audioEpoch += 1;
+      audioQueue = [];
+      if (currentSource) currentSource.stop();
+      currentSource = null;
+      audioPlaying = false;
+    });
+    events.onopen = () => {
+      connection.textContent = 'Connected to desktop reader';
+      connection.classList.add('connected');
+    };
+    events.onerror = () => {
+      connection.textContent = 'Connection lost. Retrying…';
+      connection.classList.remove('connected');
+    };
+  </script>
+</body>
+
+</html>

@@ -134,7 +134,7 @@ def generate(readerUI, scriptLines, source_text):
                 return
             sample = AudioSample(audio_chunks, line, volume_multiplier, end_offset)
             sample.web_item_id = readerUI.web_add_buffered_line(
-                line.text, character.voice
+                line.text, character.voice, line.start, line.end
             )
             sample.web_voice = character.voice
             audio_queue.append(sample)
