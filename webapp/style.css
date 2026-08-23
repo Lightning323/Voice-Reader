@@ -43,6 +43,7 @@
     html,
     body {
       height: 100%;
+      touch-action: pan-x pan-y;
     }
 
     body {
@@ -182,6 +183,10 @@
 
     .reader-settings[hidden] {
       display: none;
+    }
+
+    #reader-settings-toggle{
+      margin-right: 20px;
     }
 
     .speed {
@@ -416,7 +421,7 @@
     }
 
     .characters {
-      min-height: 290px;
+      min-height: max-content;
       display: grid;
       grid-template-rows: auto minmax(85px, 1fr) auto;
       gap: 8px;
@@ -518,7 +523,7 @@
       }
     }
 
-    @media (max-width: 900px) {
+    @media (max-width: 800px) {
       body {
         overflow: hidden;
       }

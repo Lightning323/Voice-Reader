@@ -266,7 +266,20 @@ class VoiceReaderUI:
 
     @staticmethod
     def read_clipboard() -> dict[str, Any]:
-        """Return clipboard text using the host OS instead of WebEngine APIs."""
+        """Return clipboard text using the native Qt clipboard when available."""
+        # The desktop app already runs a Qt event loop. Using its clipboard
+        # avoids depending on command-line tools such as xclip or wl-paste,
+        # which are often missing from packaged Linux installations.
+        try:
+            from PyQt6.QtGui import QGuiApplication
+
+            clipboard = QGuiApplication.clipboard()
+            if clipboard is not None:
+                return {"ok": True, "text": clipboard.text()}
+        except (ImportError, RuntimeError, AttributeError):
+            pass
+
+        # Keep the platform fallbacks for source runs without the Qt backend.
         if sys.platform.startswith("win"):
             commands = [["powershell", "-NoProfile", "-Command", "Get-Clipboard", "-Raw"]]
         elif sys.platform == "darwin":

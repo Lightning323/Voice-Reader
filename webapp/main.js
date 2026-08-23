@@ -36,7 +36,10 @@
       if (method === 'control') return remoteRequest('/api/control', { action: args[0], ...(args[1] !== undefined ? { text: args[1] } : {}) });
       if (method === 'read_clipboard') {
         try { return { ok: true, text: await navigator.clipboard.readText() }; }
-        catch (_) { return { ok: false, message: 'Clipboard access is unavailable. Click in the editor and use Ctrl+V.' }; }
+        catch (_) {
+          const result = await remoteRequest('/api/ui', { action: 'paste_desktop_clipboard' });
+          return { ...result, source: 'desktop' };
+        }
       }
       if (method === 'characters') return (await remoteRequest('/api/state')).characters;
       const actions = {
@@ -313,6 +316,17 @@
     $('#close-search').addEventListener('click', closeSearch);
     $('#search-query').addEventListener('keydown', (event) => { if (event.key === 'Enter') findText(); if (event.key === 'Escape') closeSearch(); });
     document.addEventListener('keydown', (event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') { event.preventDefault(); openSearch(); } });
+    document.addEventListener('keydown', (event) => {
+      if ((event.ctrlKey || event.metaKey) && ['+', '=', '-', '0'].includes(event.key)) event.preventDefault();
+    });
+    document.addEventListener('wheel', (event) => {
+      if (event.ctrlKey || event.metaKey) event.preventDefault();
+    }, { passive: false });
+    document.addEventListener('gesturestart', (event) => event.preventDefault(), { passive: false });
+    document.addEventListener('gesturechange', (event) => event.preventDefault(), { passive: false });
+    document.addEventListener('touchmove', (event) => {
+      if (event.touches.length > 1) event.preventDefault();
+    }, { passive: false });
     script.addEventListener('wheel', (event) => { if (event.ctrlKey || event.metaKey) { event.preventDefault(); bridge('change_font_size', event.deltaY < 0 ? 1 : -1); } }, { passive: false });
     document.querySelectorAll('[data-font-size-change]').forEach((button) => {
       button.addEventListener('click', () => bridge('change_font_size', Number(button.dataset.fontSizeChange)));
@@ -322,6 +336,7 @@
         const result = await bridge('read_clipboard');
         if (!result.ok) throw new Error(result.message);
         script.value = result.text; renderHighlights(); await bridge('set_text', result.text);
+        if (result.source === 'desktop') notify('Pasted from the desktop clipboard.');
       } catch (error) { notify(error.message || 'Clipboard access was unavailable. Use Ctrl+V in the editor instead.', true); script.focus(); }
     });
     $('#server-toggle').addEventListener('click', async () => {

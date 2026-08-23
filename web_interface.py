@@ -445,6 +445,15 @@ class WebInterfaceServer:
                 app.set_script_contents(text)
                 self.update_state(text=text)
                 return {"ok": True}
+            if action == "paste_desktop_clipboard":
+                clipboard = app.read_clipboard()
+                if not clipboard.get("ok"):
+                    return clipboard
+                text = clipboard.get("text", "")
+                if not isinstance(text, str):
+                    raise ValueError("Clipboard text is invalid.")
+                app.set_script_contents(text)
+                return {"ok": True, "text": text}
             if action == "set_speed":
                 app.set_speed(float(payload.get("value")))
                 return {"ok": True}
