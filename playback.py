@@ -3,7 +3,17 @@ import numpy as np
 import time
 import threading
 
-pygame.mixer.init(frequency=24000, size=-16, channels=1)
+_mixer_initialized = False
+_mixer_lock = threading.Lock()
+
+
+def _ensure_mixer_initialized():
+    """Delay local-audio setup so headless browser playback needs no device."""
+    global _mixer_initialized
+    with _mixer_lock:
+        if not _mixer_initialized:
+            pygame.mixer.init(frequency=24000, size=-16, channels=1)
+            _mixer_initialized = True
 
 
 current_channel = None
@@ -210,6 +220,7 @@ def play_audio(readerUI, audio_chunks, volume_multiplier, end_offset):
         if delay_unless_interrupted(None, (max(1, 1 + end_offset))):
             return True
     else:
+        _ensure_mixer_initialized()
         for i, audio in enumerate(audio_chunks):
             audio = audio.detach().cpu().numpy().flatten()
 

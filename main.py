@@ -1,6 +1,9 @@
-import ui
+import argparse
+import signal
+import sys
 import threading
 import scriptParsing
+import ui
 from playback import playback_thread, seek, start_playback, pause_playback, stop_playback, shutdown_playback,  audio_queue, generation_stop,generation_lock, set_audio_index
 import characters
 import time
@@ -8,10 +11,21 @@ from web_interface import WebInterfaceServer
 # ============================================================
 # KOKORO SETUP
 # ============================================================
-print("Loading Kokoro...")
-from kokoro import KPipeline
-pipeline = KPipeline(lang_code="a")
-print("Kokoro loaded.\n\n")
+pipeline = None
+_pipeline_lock = threading.Lock()
+
+
+def load_pipeline():
+    """Load Kokoro only after command-line arguments have been validated."""
+    global pipeline
+    with _pipeline_lock:
+        if pipeline is None:
+            print("Loading Kokoro...")
+            from kokoro import KPipeline
+
+            pipeline = KPipeline(lang_code="a")
+            print("Kokoro loaded.\n")
+    return pipeline
 
 
 # ============================
@@ -56,7 +70,7 @@ def get_character_voice(character):
 
 def generate_audio(my_gen_id, text, voice, speed):
     global generated_characters, audio_queue, gen_threads, latest_gen_id
-    generator = pipeline(text, voice=voice, speed=speed)
+    generator = load_pipeline()(text, voice=voice, speed=speed)
     audio_chunks = []
     for _, _, audio in generator:
         if should_cancel_generation(my_gen_id):
@@ -232,17 +246,25 @@ def toggle_web_server(readerUI, port):
     return True, f"Open {detail} in a browser on your local network.", True
 
 
-app = ui.VoiceReaderUI(
-    playRunnable=play,
-    stopRunnable=stop_playback,
-    pauseRunnable=pause_playback,
-    seekRunnable=seek,
-    modeChangeRunnable=change_mode,
-    webServerRunnable=toggle_web_server,
-)
-app.web_server = web_server
-
 _shutdown_started = False
+play_thread = None
+
+
+def create_app():
+    """Create the shared reader controller used by desktop and headless modes."""
+    global app
+    if app is None:
+        app = ui.VoiceReaderUI(
+            playRunnable=play,
+            stopRunnable=stop_playback,
+            pauseRunnable=pause_playback,
+            seekRunnable=seek,
+            modeChangeRunnable=change_mode,
+            webServerRunnable=toggle_web_server,
+        )
+        app.web_server = web_server
+        app.set_shutdown_callback(shutdown)
+    return app
 
 
 def shutdown():
@@ -255,12 +277,77 @@ def shutdown():
     shutdown_playback(app)
 
 
-app.set_shutdown_callback(shutdown)
+def start_playback_thread(reader):
+    """Start the single playback worker after the reader is ready."""
+    global play_thread
+    if play_thread is None or not play_thread.is_alive():
+        play_thread = threading.Thread(target=playback_thread, args=(reader,), daemon=True)
+        play_thread.start()
 
-# ============================
-# PERMANENT PLAYBACK THREAD
-# ============================
-play_thread = threading.Thread(target=playback_thread, args=(app,), daemon=True)
-play_thread.start()
 
-app.run()
+def parse_port(value):
+    try:
+        port = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("port must be a number") from error
+    if not 1 <= port <= 65535:
+        raise argparse.ArgumentTypeError("port must be between 1 and 65535")
+    return port
+
+
+def parse_arguments(argv=None):
+    parser = argparse.ArgumentParser(description="Read text aloud with Kokoro.")
+    parser.add_argument(
+        "--hs",
+        metavar="PORT",
+        type=parse_port,
+        help="start the browser server on PORT without opening the desktop UI",
+    )
+    return parser.parse_args(argv)
+
+
+def run_headless(port):
+    """Run the browser reader without creating a desktop window."""
+    reader = create_app()
+    success, message, _ = toggle_web_server(reader, port)
+    if not success:
+        print(message, file=sys.stderr)
+        shutdown()
+        return 1
+
+    start_playback_thread(reader)
+    print(f"Headless server running at {web_server.url}")
+    print("Press Ctrl+C to stop.")
+
+    stop_event = threading.Event()
+
+    def request_shutdown(signum, frame):
+        del signum, frame
+        stop_event.set()
+
+    signal.signal(signal.SIGINT, request_shutdown)
+    signal.signal(signal.SIGTERM, request_shutdown)
+    try:
+        stop_event.wait()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        shutdown()
+    return 0
+
+
+def main(argv=None):
+    arguments = parse_arguments(argv)
+
+    if arguments.hs is not None:
+        return run_headless(arguments.hs)
+
+    load_pipeline()
+    reader = create_app()
+    start_playback_thread(reader)
+    reader.run()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -57,6 +57,14 @@ sudo apt-get install libxcb-cursor0
 python main.py
 ```
 
+To run only the browser server, without opening the desktop window, specify a
+port with `--hs`:
+```bash
+python main.py --hs 8080
+```
+The application prints the local-network URL when it is ready. Press `Ctrl+C`
+to stop the server.
+
 
 # Usage Modes
 
@@ -78,6 +86,10 @@ Reader Mode ignores screenplay-style character changes and focuses on natural na
 
 The desktop window loads directly from a local file and does **not** reserve a
 port. This keeps the normal app free of port conflicts.
+
+You can also start this interface directly with `python main.py --hs <port>`.
+In this headless mode no desktop window is created; all controls are available
+from the browser served at the selected port.
 
 To let another device use the reader, choose a port in **Share with Other
 Devices** and select **Allow devices & start**. The app displays a local-network
