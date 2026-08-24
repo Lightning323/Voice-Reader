@@ -20,6 +20,35 @@
     let audioPlaying = false;
     let currentSource = null;
     let audioEpoch = 0;
+    let screenWakeLock = null;
+    let keepScreenAwake = false;
+
+    async function requestScreenWakeLock() {
+      // iOS releases the lock when Safari is backgrounded, so only request it
+      // while this page is visible and restore it when the page returns.
+      if (!keepScreenAwake || screenWakeLock || !navigator.wakeLock || document.visibilityState !== 'visible') return;
+      try {
+        const lock = await navigator.wakeLock.request('screen');
+        screenWakeLock = lock;
+        lock.addEventListener('release', () => {
+          if (screenWakeLock === lock) screenWakeLock = null;
+          if (document.visibilityState === 'visible') void requestScreenWakeLock();
+        });
+      } catch (error) {
+        // Low Power Mode and some browsers can reject a wake-lock request.
+        // Playback continues normally when a lock is unavailable.
+        console.debug('Screen wake lock was unavailable.', error);
+      }
+    }
+
+    function keepScreenOn() {
+      keepScreenAwake = true;
+      void requestScreenWakeLock();
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') void requestScreenWakeLock();
+    });
 
     async function remoteRequest(path, payload) {
       const response = await fetch(path, payload && {
@@ -219,6 +248,7 @@
 
     async function control(action) {
       try {
+        if (action === 'play') keepScreenOn();
         if (remoteMode && action === 'play') await unlockAudio();
         const result = await bridge('control', action, script.value);
         if (!result.ok) notify(result.message || 'The command could not be completed.', true);
