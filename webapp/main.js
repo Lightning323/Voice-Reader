@@ -10,45 +10,84 @@
     const toolbar = $('.toolbar');
     const readerSettings = $('#reader-settings');
     const readerSettingsToggle = $('#reader-settings-toggle');
+    const audioPlayer = $('#audio-player');
     let state = {};
     let textTimer;
     let lastActiveRange = '';
     let highlightRenderFrame;
     const remoteMode = ['http:', 'https:'].includes(window.location.protocol);
-    let audioContext = null;
     let audioQueue = [];
     let audioPlaying = false;
-    let currentSource = null;
+    let currentAudio = null;
     let audioEpoch = 0;
-    let screenWakeLock = null;
-    let keepScreenAwake = false;
+    let silentAudioUrl = null;
 
-    async function requestScreenWakeLock() {
-      // iOS releases the lock when Safari is backgrounded, so only request it
-      // while this page is visible and restore it when the page returns.
-      if (!keepScreenAwake || screenWakeLock || !navigator.wakeLock || document.visibilityState !== 'visible') return;
+    function setMediaSessionPlaybackState(playbackState) {
+      if (!remoteMode || !('mediaSession' in navigator)) return;
+      try { navigator.mediaSession.playbackState = playbackState; }
+      catch (_) { /* The API is optional and varies between mobile browsers. */ }
+    }
+
+    function updateMediaSessionPosition() {
+      if (!remoteMode || !currentAudio || !('mediaSession' in navigator) || !Number.isFinite(audioPlayer.duration) || audioPlayer.duration <= 0) return;
       try {
-        const lock = await navigator.wakeLock.request('screen');
-        screenWakeLock = lock;
-        lock.addEventListener('release', () => {
-          if (screenWakeLock === lock) screenWakeLock = null;
-          if (document.visibilityState === 'visible') void requestScreenWakeLock();
+        navigator.mediaSession.setPositionState({
+          duration: audioPlayer.duration,
+          position: Math.min(audioPlayer.currentTime, audioPlayer.duration),
+          playbackRate: audioPlayer.playbackRate,
         });
-      } catch (error) {
-        // Low Power Mode and some browsers can reject a wake-lock request.
-        // Playback continues normally when a lock is unavailable.
-        console.debug('Screen wake lock was unavailable.', error);
-      }
+      } catch (_) { /* Position controls are not available in every browser. */ }
     }
 
-    function keepScreenOn() {
-      keepScreenAwake = true;
-      void requestScreenWakeLock();
+    function updateMediaSession() {
+      if (!remoteMode || !('mediaSession' in navigator)) return;
+      try {
+        if (typeof MediaMetadata !== 'undefined') {
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title: state.highlighted_text?.trim() || 'Voice Reader',
+            artist: state.voice?.trim() || 'Voice Reader',
+            album: 'Voice Reader',
+            artwork: [{
+              src: new URL('/icon/icon.png', window.location.href).href,
+              sizes: '650x650',
+              type: 'image/png',
+            }],
+          });
+        }
+        const stopped = !state.playback_mode && !audioPlaying && !currentAudio
+          && ['Idle', 'Stopped', 'Web interface ready'].includes(state.status);
+        setMediaSessionPlaybackState(stopped ? 'none' : (audioPlaying || state.playback_mode ? 'playing' : 'paused'));
+        updateMediaSessionPosition();
+      } catch (_) { /* Media Session support is best-effort. */ }
     }
 
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') void requestScreenWakeLock();
-    });
+    function seekCurrentAudio(offset) {
+      if (!Number.isFinite(audioPlayer.duration)) return;
+      audioPlayer.currentTime = Math.max(0, Math.min(audioPlayer.duration, audioPlayer.currentTime + offset));
+      updateMediaSessionPosition();
+    }
+
+    function setMediaSessionAction(action, handler) {
+      try { navigator.mediaSession.setActionHandler(action, handler); }
+      catch (_) { /* Ignore actions that this browser has not implemented. */ }
+    }
+
+    function configureMediaSession() {
+      if (!remoteMode || !('mediaSession' in navigator)) return;
+      setMediaSessionAction('play', () => { void control('play'); });
+      setMediaSessionAction('pause', () => { void control('pause'); });
+      setMediaSessionAction('stop', () => { void control('stop'); });
+      setMediaSessionAction('previoustrack', () => { void control('back'); });
+      setMediaSessionAction('nexttrack', () => { void control('forward'); });
+      setMediaSessionAction('seekbackward', (details = {}) => seekCurrentAudio(-(details.seekOffset || 10)));
+      setMediaSessionAction('seekforward', (details = {}) => seekCurrentAudio(details.seekOffset || 10));
+      setMediaSessionAction('seekto', (details = {}) => {
+        if (!Number.isFinite(details.seekTime) || !Number.isFinite(audioPlayer.duration)) return;
+        audioPlayer.currentTime = Math.max(0, Math.min(audioPlayer.duration, details.seekTime));
+        updateMediaSessionPosition();
+      });
+      updateMediaSession();
+    }
 
     async function remoteRequest(path, payload) {
       const response = await fetch(path, payload && {
@@ -241,6 +280,7 @@
       const url = $('#server-url'); url.textContent = server.url || ''; url.href = server.url || '#';
       renderCharacters();
       renderHighlights();
+      updateMediaSession();
       requestAnimationFrame(syncReaderSettingsLayout);
     }
 
@@ -248,7 +288,6 @@
 
     async function control(action) {
       try {
-        if (action === 'play') keepScreenOn();
         if (remoteMode && action === 'play') await unlockAudio();
         const result = await bridge('control', action, script.value);
         if (!result.ok) notify(result.message || 'The command could not be completed.', true);
@@ -267,8 +306,35 @@
     }
 
     async function unlockAudio() {
-      if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioContext.state !== 'running') await audioContext.resume();
+      // Mobile browsers require the media element to begin playback from a
+      // user gesture. Keep this exact element playing a silent loop until a
+      // generated clip arrives; pausing it here can make the real clip fail
+      // the browser's autoplay policy.
+      await keepAudioSessionAlive();
+    }
+
+    function getSilentAudioUrl() {
+      if (silentAudioUrl) return silentAudioUrl;
+      const frames = 800;
+      const bytes = new Uint8Array(44 + frames).fill(128, 44);
+      const view = new DataView(bytes.buffer);
+      const writeText = (offset, text) => [...text].forEach((character, index) => view.setUint8(offset + index, character.charCodeAt(0)));
+      writeText(0, 'RIFF'); view.setUint32(4, 36 + frames, true); writeText(8, 'WAVE');
+      writeText(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+      view.setUint32(24, 8000, true); view.setUint32(28, 8000, true); view.setUint16(32, 1, true); view.setUint16(34, 8, true);
+      writeText(36, 'data'); view.setUint32(40, frames, true);
+      silentAudioUrl = URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' }));
+      return silentAudioUrl;
+    }
+
+    async function keepAudioSessionAlive() {
+      const silentUrl = getSilentAudioUrl();
+      if (audioPlayer.src !== silentUrl || !audioPlayer.loop) {
+        audioPlayer.loop = true;
+        audioPlayer.src = silentUrl;
+        audioPlayer.load();
+      }
+      await audioPlayer.play();
     }
 
     async function acknowledgeAudio(id) {
@@ -276,37 +342,57 @@
       catch (_) { control('pause'); }
     }
 
+    function resetAudioPlayer() {
+      currentAudio = null;
+      audioPlaying = false;
+      audioPlayer.loop = false;
+      audioPlayer.pause();
+      audioPlayer.removeAttribute('src');
+      audioPlayer.load();
+    }
+
+    function failAudio(item, error) {
+      if (currentAudio !== item || item?.epoch !== audioEpoch) return;
+      resetAudioPlayer();
+      updateMediaSession();
+      notify(`Audio error: ${error?.message || 'Unable to play this clip.'}`, true);
+      // Do not leave the desktop playback thread waiting for a clip that the
+      // browser could not play.
+      void control('pause');
+    }
+
     async function playNextAudio() {
-      if (audioPlaying || !audioQueue.length || !audioContext || audioContext.state !== 'running') return;
-      const item = audioQueue.shift();
-      const epoch = audioEpoch;
+      if (audioPlaying || !audioQueue.length) return;
+      const item = { ...audioQueue.shift(), epoch: audioEpoch };
       audioPlaying = true;
+      currentAudio = item;
+      updateMediaSession();
       try {
-        const response = await fetch(item.url);
-        if (!response.ok) throw new Error('Audio clip expired.');
-        const clip = await audioContext.decodeAudioData(await response.arrayBuffer());
-        if (epoch !== audioEpoch) return;
-        const source = audioContext.createBufferSource();
-        const gain = audioContext.createGain();
-        source.buffer = clip;
-        gain.gain.value = item.volume;
-        source.connect(gain).connect(audioContext.destination);
-        currentSource = source;
-        source.onended = () => {
-          if (epoch !== audioEpoch) return;
-          currentSource = null;
-          audioPlaying = false;
-          acknowledgeAudio(item.id);
-          playNextAudio();
-        };
-        source.start();
+        audioPlayer.loop = false;
+        audioPlayer.src = item.url;
+        const volume = Number(item.volume);
+        audioPlayer.volume = Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : 1;
+        audioPlayer.load();
+        await audioPlayer.play();
+        if (currentAudio === item && item.epoch === audioEpoch) updateMediaSession();
       } catch (error) {
-        if (epoch !== audioEpoch) return;
-        audioPlaying = false;
-        notify(`Audio error: ${error.message}`, true);
-        playNextAudio();
+        failAudio(item, error);
       }
     }
+
+    audioPlayer.addEventListener('ended', () => {
+      const item = currentAudio;
+      if (!item || item.epoch !== audioEpoch) return;
+      currentAudio = null;
+      audioPlaying = false;
+      updateMediaSession();
+      if (!audioQueue.length) void keepAudioSessionAlive();
+      acknowledgeAudio(item.id);
+      playNextAudio();
+    });
+    audioPlayer.addEventListener('error', () => failAudio(currentAudio, audioPlayer.error));
+    audioPlayer.addEventListener('loadedmetadata', updateMediaSessionPosition);
+    audioPlayer.addEventListener('timeupdate', updateMediaSessionPosition);
 
     $('#play-pause').addEventListener('click', () => control(state.playback_mode ? 'pause' : 'play'));
     $('#back').addEventListener('click', () => control('back'));
@@ -486,6 +572,7 @@
 
     async function startRemoteSession() {
       try {
+        configureMediaSession();
         applyState(await bridge('get_state'));
         const events = new EventSource('/api/events');
         events.addEventListener('state', (event) => applyState(JSON.parse(event.data)));
@@ -493,9 +580,8 @@
         events.addEventListener('audio-stop', () => {
           audioEpoch += 1;
           audioQueue = [];
-          if (currentSource) currentSource.stop();
-          currentSource = null;
-          audioPlaying = false;
+          resetAudioPlayer();
+          setMediaSessionPlaybackState('paused');
         });
         events.onerror = () => notify('Connection lost. Retrying…', true);
       } catch (error) {

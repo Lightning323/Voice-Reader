@@ -133,6 +133,9 @@
     </nav>
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <!-- A persistent media element lets mobile browsers keep speech playing after
+       the page is backgrounded or the screen is locked. -->
+  <audio id="audio-player" preload="auto" playsinline aria-hidden="true" tabindex="-1"></audio>
   <script src="./main.js"></script>
 </body>
 

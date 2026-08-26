@@ -82,7 +82,7 @@ Reader Mode is intended for content that uses a single narrator voice. Recommend
 
 Reader Mode ignores screenplay-style character changes and focuses on natural narration.
 
-## Web Interface
+# Web Interface
 
 The desktop window loads directly from a local file and does **not** reserve a
 port. This keeps the normal app free of port conflicts.
@@ -96,7 +96,10 @@ Devices** and select **Allow devices & start**. The app displays a local-network
 URL to open on a trusted device. Select **Stop sharing** when finished. While
 sharing is running, generated audio is sent to the connected browser instead of
 the computer speakers. The browser offers Play, Pause, Stop, Back, and Forward
-controls and displays the current highlighted text and active voice.
+controls and displays the current highlighted text and active voice. On mobile,
+the browser keeps the spoken audio in its media player, so playback can continue
+when the page is in the background or the screen is locked; lock-screen media
+controls can pause, stop, skip, and seek within the current clip.
 
 The server is intended for a trusted local network. Stop it when it is no longer
 needed.

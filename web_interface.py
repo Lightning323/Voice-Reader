@@ -32,6 +32,7 @@ def _resource_path(*parts: str) -> str:
 # this explicit allowlist so it exposes the same local assets without serving
 # arbitrary files from the application bundle.
 _STATIC_ASSETS = {
+    "/icon/icon.png": (("icon", "icon.png"), "image/png"),
     "/style.css": (("webapp", "style.css"), "text/css; charset=utf-8"),
     "/main.js": (("webapp", "main.js"), "application/javascript; charset=utf-8"),
     "/vendor/phosphor-icons/regular/style.css": (

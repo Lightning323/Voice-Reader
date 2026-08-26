@@ -243,13 +243,17 @@ def play_audio(readerUI, audio_chunks, volume_multiplier, end_offset):
 
 
 def play_web_audio(readerUI, audio_chunks, volume_multiplier, end_offset):
-    """Stream playback clips to the browser while preserving normal timing."""
+    """Queue playback clips in the browser while preserving normal timing."""
     if audio_chunks is None:  # Still preserve script pauses in browser mode.
         if delay_unless_interrupted(None, max(1, 1 + end_offset)):
             return True
         return False
 
-    for index, audio in enumerate(audio_chunks):
+    # Publish all chunks for this generated item before waiting for the first
+    # one to complete. This keeps the browser's media queue populated while a
+    # mobile device is locked or the page is in the background.
+    audio_ids = []
+    for audio in audio_chunks:
         pcm = np.clip(
             audio.detach().cpu().numpy().flatten() * 32767, -32768, 32767
         ).astype(np.int16)
@@ -257,11 +261,14 @@ def play_web_audio(readerUI, audio_chunks, volume_multiplier, end_offset):
         audio_id = readerUI.web_send_audio(pcm.tobytes(), duration, volume_multiplier)
         if not audio_id:
             return True
+        audio_ids.append(audio_id)
+
+    for index, audio_id in enumerate(audio_ids):
         if not readerUI.web_wait_for_audio(audio_id):
             return True
         if not allow_playback:
             return True
-        if index == len(audio_chunks) - 1 and delay_unless_interrupted(
+        if index == len(audio_ids) - 1 and delay_unless_interrupted(
             None, max(0.01, end_offset)
         ):
             return True
