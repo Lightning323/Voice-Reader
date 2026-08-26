@@ -453,8 +453,10 @@ class WebInterfaceServer:
                 text = clipboard.get("text", "")
                 if not isinstance(text, str):
                     raise ValueError("Clipboard text is invalid.")
-                app.set_script_contents(text)
-                return {"ok": True, "text": text}
+                html = clipboard.get("html")
+                if html is not None and not isinstance(html, str):
+                    raise ValueError("Clipboard rich text is invalid.")
+                return {"ok": True, "text": text, **({"html": html} if html else {})}
             if action == "set_speed":
                 app.set_speed(float(payload.get("value")))
                 return {"ok": True}

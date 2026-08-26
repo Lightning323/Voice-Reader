@@ -270,7 +270,7 @@ class VoiceReaderUI:
 
     @staticmethod
     def read_clipboard() -> dict[str, Any]:
-        """Return clipboard text using the native Qt clipboard when available."""
+        """Return clipboard text and, when available, its rich HTML form."""
         # The desktop app already runs a Qt event loop. Using its clipboard
         # avoids depending on command-line tools such as xclip or wl-paste,
         # which are often missing from packaged Linux installations.
@@ -279,7 +279,11 @@ class VoiceReaderUI:
 
             clipboard = QGuiApplication.clipboard()
             if clipboard is not None:
-                return {"ok": True, "text": clipboard.text()}
+                result = {"ok": True, "text": clipboard.text()}
+                mime_data = clipboard.mimeData()
+                if mime_data is not None and mime_data.hasHtml():
+                    result["html"] = mime_data.html()
+                return result
         except (ImportError, RuntimeError, AttributeError):
             pass
 

@@ -250,46 +250,60 @@ nltk.download("punkt_tab")
 from nltk.tokenize import sent_tokenize
 
 
-def merge_lines_into_paragraphs(text):
-    lines = text.splitlines()
+_LIST_ITEM_PATTERN = re.compile(r"^(?:\d+[.)]|[A-Za-z][.)]|[-*•])\s+")
 
+
+def is_all_caps_title(text):
+    """Return whether a standalone line looks like an all-caps heading.
+
+    Treating these as a paragraph of their own prevents a title copied from a
+    book, article, or document from being joined to its first sentence.
+    """
+    letters = [character for character in text if character.isalpha()]
+    return len(letters) >= 2 and all(character.isupper() for character in letters)
+
+
+def merge_lines_into_paragraphs(text):
+    """Merge visual wraps while retaining meaningful text structure.
+
+    Rich clipboard content is normalized to blank lines between block elements
+    before it reaches this parser. Blank lines, list items, and all-caps titles
+    therefore remain hard boundaries instead of being combined with nearby
+    wrapped text.
+    """
     paragraphs = []
     buffer = ""
     start_line = None
-    current_line = 0
+    last_content_line = None
 
-    for line in lines:
-        current_line += 1
+    def flush_buffer():
+        nonlocal buffer, start_line, last_content_line
+        if buffer:
+            paragraphs.append((buffer, start_line, last_content_line))
+        buffer = ""
+        start_line = None
+        last_content_line = None
+
+    for current_line, line in enumerate(text.splitlines(), start=1):
         stripped = line.strip()
 
         if not stripped:
-            if buffer:
-                paragraphs.append((buffer, start_line, current_line - 1))
-                buffer = ""
-                start_line = None
+            flush_buffer()
+            continue
+
+        # Keep copied lists and all-caps titles as their own reader lines.
+        if _LIST_ITEM_PATTERN.match(stripped) or is_all_caps_title(stripped):
+            flush_buffer()
+            paragraphs.append((stripped, current_line, current_line))
             continue
 
         if start_line is None:
             start_line = current_line
 
-        # Keep numbered list items separate
-        if re.match(r"^\d+\s", stripped):
-            if buffer:
-                paragraphs.append((buffer, start_line, current_line - 1))
-                buffer = ""
-                start_line = current_line
+        buffer = f"{buffer} {stripped}".strip()
+        last_content_line = current_line
 
-            paragraphs.append((stripped, current_line, current_line))
-            continue
-
-        if buffer:
-            buffer += " " + stripped
-        else:
-            buffer = stripped
-
-    if buffer:
-        paragraphs.append((buffer, start_line, current_line))
-
+    flush_buffer()
     return paragraphs
 
 
@@ -301,7 +315,9 @@ def parse_text(text):
 
     for paragraph, paragraph_line_start, paragraph_line_end in paragraphs:
 
-        sentences = sent_tokenize(paragraph)
+        # A title should be read and displayed as one sentence even if its
+        # punctuation happens to confuse sentence tokenization.
+        sentences = [paragraph] if is_all_caps_title(paragraph) else sent_tokenize(paragraph)
 
         for sentence in sentences:
             new_text.append(sentence)

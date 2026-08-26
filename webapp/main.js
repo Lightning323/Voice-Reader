@@ -104,7 +104,7 @@ async function remoteCall(method, ...args) {
   if (method === 'get_state') return remoteRequest('/api/state');
   if (method === 'control') return remoteRequest('/api/control', { action: args[0], ...(args[1] !== undefined ? { text: args[1] } : {}) });
   if (method === 'read_clipboard') {
-    try { return { ok: true, text: await navigator.clipboard.readText() }; }
+    try { return await readBrowserClipboard(); }
     catch (_) {
       const result = await remoteRequest('/api/ui', { action: 'paste_desktop_clipboard' });
       return { ...result, source: 'desktop' };
@@ -125,6 +125,21 @@ async function remoteCall(method, ...args) {
   };
   if (!actions[method]) throw new Error('The shared reader does not support this action.');
   return remoteRequest('/api/ui', actions[method]);
+}
+
+async function readBrowserClipboard() {
+  if (navigator.clipboard?.read) {
+    const items = await navigator.clipboard.read();
+    let text = '';
+    let html = '';
+    for (const item of items) {
+      if (!html && item.types.includes('text/html')) html = await (await item.getType('text/html')).text();
+      if (!text && item.types.includes('text/plain')) text = await (await item.getType('text/plain')).text();
+      if (html && text) break;
+    }
+    if (html || text) return { ok: true, text, ...(html ? { html } : {}) };
+  }
+  return { ok: true, text: await navigator.clipboard.readText() };
 }
 
 function bridge(method, ...args) {
@@ -153,6 +168,60 @@ function notify(message, error = false) {
 
 function escapeHtml(value) {
   return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
+
+function richClipboardToText(html, fallback = '') {
+  if (!html || typeof DOMParser === 'undefined') return fallback;
+  const documentFragment = new DOMParser().parseFromString(html, 'text/html');
+  const blockTags = new Set([
+    'ADDRESS', 'ARTICLE', 'ASIDE', 'BLOCKQUOTE', 'DD', 'DIV', 'DL', 'DT',
+    'FIGCAPTION', 'FIGURE', 'FOOTER', 'FORM', 'H1', 'H2', 'H3', 'H4', 'H5',
+    'H6', 'HEADER', 'HR', 'LI', 'MAIN', 'NAV', 'OL', 'P', 'PRE', 'SECTION',
+    'TABLE', 'TR', 'UL',
+  ]);
+  const ignoredTags = new Set(['HEAD', 'SCRIPT', 'STYLE', 'TEMPLATE']);
+  let output = '';
+
+  const addBreak = (count = 1) => {
+    output = output.replace(/[ \t]+$/u, '');
+    const existing = output.match(/\n*$/u)[0].length;
+    output += '\n'.repeat(Math.max(0, count - existing));
+  };
+  const walk = (node) => {
+    if (node.nodeType === 3) {
+      output += node.nodeValue.replaceAll('\u00a0', ' ');
+      return;
+    }
+    if (node.nodeType !== 1) return;
+    const tag = node.tagName;
+    if (ignoredTags.has(tag)) return;
+    if (tag === 'BR') {
+      addBreak();
+      return;
+    }
+    if (tag === 'IMG') {
+      output += node.getAttribute('alt') || '';
+      return;
+    }
+    if (tag === 'TD' || tag === 'TH') {
+      if (output && !output.endsWith('\n')) output += '; ';
+      node.childNodes.forEach(walk);
+      return;
+    }
+    const isBlock = blockTags.has(tag);
+    if (isBlock) addBreak(2);
+    node.childNodes.forEach(walk);
+    if (isBlock) addBreak(2);
+  };
+
+  documentFragment.body.childNodes.forEach(walk);
+  const structuredText = output
+    .replace(/\r\n?/gu, '\n')
+    .replace(/[ \t]+\n/gu, '\n')
+    .replace(/\n[ \t]+/gu, '\n')
+    .replace(/\n{3,}/gu, '\n\n')
+    .trim();
+  return structuredText || fallback;
 }
 
 function offsetsForLines(range) {
@@ -492,7 +561,8 @@ $('#paste').addEventListener('click', async () => {
   try {
     const result = await bridge('read_clipboard');
     if (!result.ok) throw new Error(result.message);
-    script.value = result.text; renderHighlights(); await bridge('set_text', result.text);
+    const text = richClipboardToText(result.html, result.text);
+    script.value = text; renderHighlights(); await bridge('set_text', text);
     if (result.source === 'desktop') notify('Pasted from the desktop clipboard.');
   } catch (error) { notify(error.message || 'Clipboard access was unavailable. Use Ctrl+V in the editor instead.', true); script.focus(); }
 });
