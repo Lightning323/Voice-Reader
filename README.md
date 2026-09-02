@@ -97,9 +97,12 @@ URL to open on a trusted device. Select **Stop sharing** when finished. While
 sharing is running, generated audio is sent to the connected browser instead of
 the computer speakers. The browser offers Play, Pause, Stop, Back, and Forward
 controls and displays the current highlighted text and active voice. On mobile,
-the browser keeps the spoken audio in its media player, so playback can continue
-when the page is in the background or the screen is locked; lock-screen media
-controls can pause, stop, skip, and seek within the current clip.
+the browser receives the read as one continuous media stream rather than a
+series of short clips. This lets the device's media player continue while the
+page is in the background or the screen is locked, without relying on page
+JavaScript to start each next sentence. Lock-screen media controls can pause,
+stop, or skip. A phone call, another app taking audio focus, or an operating
+system-level media restriction can still interrupt any browser-based player.
 
 The server is intended for a trusted local network. Stop it when it is no longer
 needed.

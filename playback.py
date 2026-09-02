@@ -62,6 +62,11 @@ def start_playback(readerUI):
     with playback_state_lock:
         allow_playback = True
         play_event.set()
+        # The remote player must have one long-lived media source before the
+        # playback worker begins publishing PCM.  Mobile browsers can suspend
+        # page JavaScript in the background, but continue consuming an active
+        # HTML media stream.
+        readerUI.web_prepare_audio_stream()
 
     print("Started")
     readerUI.playback_mode(True)
@@ -100,6 +105,25 @@ def stop_playback(readerUI):
     readerUI.web_clear_playback()
 
     print("Stopped")
+    readerUI.set_status("Stopped")
+
+
+def finish_playback(readerUI):
+    """Finish naturally without cutting off buffered browser audio."""
+    global playback_index, playback_state_lock, cached_text, allow_playback
+
+    with playback_state_lock:
+        play_event.clear()
+        allow_playback = False
+        playback_index = 0
+        audio_queue.clear()
+        cached_text = ""
+        generation_stop.set()
+
+    # Closing the stream tells the browser where the media ends, but lets it
+    # play the final buffered seconds instead of treating completion as Pause.
+    readerUI.web_finish_audio_stream()
+    readerUI.playback_mode(False)
     readerUI.set_status("Stopped")
 
 
@@ -165,7 +189,7 @@ def playback_thread(readerUI):
 
                 # End marker
                 if sample is None:
-                    stop_playback(readerUI)
+                    finish_playback(readerUI)
                     continue
 
                 if readerUI:
@@ -243,37 +267,38 @@ def play_audio(readerUI, audio_chunks, volume_multiplier, end_offset):
 
 
 def play_web_audio(readerUI, audio_chunks, volume_multiplier, end_offset):
-    """Queue playback clips in the browser while preserving normal timing."""
-    if audio_chunks is None:  # Still preserve script pauses in browser mode.
-        if delay_unless_interrupted(None, max(1, 1 + end_offset)):
-            return True
-        return False
+    """Append one line to the browser's persistent PCM media stream.
 
-    # Publish all chunks for this generated item before waiting for the first
-    # one to complete. This keeps the browser's media queue populated while a
-    # mobile device is locked or the page is in the background.
-    audio_ids = []
+    The old per-clip acknowledgement protocol relied on JavaScript running at
+    every clip boundary.  That is exactly the work mobile browsers may defer
+    while the page is backgrounded.  The playback worker now supplies timing;
+    the browser only has to keep consuming its one active media resource.
+    """
+    if audio_chunks is None:
+        duration = max(1, 1 + end_offset)
+        if not readerUI.web_stream_audio(b"\0\0" * round(duration * 24000)):
+            return True
+        return delay_unless_interrupted(None, duration)
+
+    pcm_parts = []
+    duration = 0.0
     for audio in audio_chunks:
         pcm = np.clip(
-            audio.detach().cpu().numpy().flatten() * 32767, -32768, 32767
+            audio.detach().cpu().numpy().flatten() * volume_multiplier * 32767,
+            -32768,
+            32767,
         ).astype(np.int16)
-        duration = len(pcm) / 24000
-        audio_id = readerUI.web_send_audio(pcm.tobytes(), duration, volume_multiplier)
-        if not audio_id:
-            return True
-        audio_ids.append(audio_id)
+        pcm_parts.append(pcm.tobytes())
+        duration += len(pcm) / 24000
 
-    for index, audio_id in enumerate(audio_ids):
-        if not readerUI.web_wait_for_audio(audio_id):
-            return True
-        if not allow_playback:
-            return True
-        if index == len(audio_ids) - 1 and delay_unless_interrupted(
-            None, max(0.01, end_offset)
-        ):
-            return True
-
-    return False
+    # Preserve pauses as PCM silence so the browser never reaches the end of a
+    # media resource between spoken lines.  A negative interruption offset
+    # intentionally has no added pause, matching desktop playback.
+    pause_duration = max(0.01, end_offset)
+    pcm_parts.append(b"\0\0" * round(pause_duration * 24000))
+    if not readerUI.web_stream_audio(b"".join(pcm_parts)):
+        return True
+    return delay_unless_interrupted(None, duration + pause_duration)
 
 """
 Returns True if interrupted
