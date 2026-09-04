@@ -10,8 +10,13 @@ from dataclasses import dataclass, field
 import io
 import os
 import json
+from pathlib import Path
+import queue
+import shutil
 import socket
+import subprocess
 import sys
+import tempfile
 import threading
 import time
 import uuid
@@ -26,6 +31,17 @@ def _resource_path(*parts: str) -> str:
     """Find browser assets in source runs and PyInstaller bundles."""
     base = getattr(sys, "_MEIPASS", os.path.dirname(__file__))
     return os.path.join(base, *parts)
+
+
+def _ffmpeg_executable() -> Optional[str]:
+    """Prefer the encoder bundled with the app, then the system installation."""
+    bundle = getattr(sys, "_MEIPASS", None)
+    if bundle:
+        name = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
+        bundled = os.path.join(bundle, name)
+        if os.path.isfile(bundled):
+            return bundled
+    return shutil.which("ffmpeg")
 
 
 # The desktop UI reads these files directly from disk. The sharing server uses
@@ -85,6 +101,201 @@ class _AudioWaiter:
     completed: bool = False
 
 
+_HLS_SAMPLE_RATE = 24000
+_HLS_BYTES_PER_SECOND = _HLS_SAMPLE_RATE * 2
+_HLS_SEGMENT_DURATION = 1.0
+_HLS_START_SEGMENTS = 6
+_HLS_CACHE_SEGMENTS = 90
+
+
+class _HLSStream:
+    """Encode a continuous PCM source into a rolling live HLS cache.
+
+    A single FFmpeg process preserves codec and media timestamps across every
+    segment. The native player can therefore advance through the playlist and
+    its buffer without JavaScript running at audio boundaries.
+    """
+
+    def __init__(self, generation: int, ffmpeg_path: str) -> None:
+        self.id = uuid.uuid4().hex
+        self.generation = generation
+        self._directory = Path(tempfile.mkdtemp(prefix="voice-reader-hls-"))
+        self._playlist_path = self._directory / "playlist.m3u8"
+        self._encode_queue: "queue.Queue[bytes | None]" = queue.Queue()
+        self._accepting = True
+        self._aborted = False
+        self._finalized = False
+        self._error: Optional[str] = None
+        self._changed = threading.Condition()
+        try:
+            self._process = subprocess.Popen(
+                [
+                    ffmpeg_path,
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-f",
+                    "s16le",
+                    "-ar",
+                    str(_HLS_SAMPLE_RATE),
+                    "-ac",
+                    "1",
+                    "-i",
+                    "pipe:0",
+                    "-c:a",
+                    "aac",
+                    "-b:a",
+                    "64k",
+                    "-flush_packets",
+                    "1",
+                    "-f",
+                    "hls",
+                    "-hls_time",
+                    str(_HLS_SEGMENT_DURATION),
+                    "-hls_list_size",
+                    str(_HLS_CACHE_SEGMENTS),
+                    "-hls_segment_type",
+                    "fmp4",
+                    "-hls_fmp4_init_filename",
+                    "init.mp4",
+                    "-hls_flags",
+                    "delete_segments+append_list+independent_segments",
+                    "-hls_segment_filename",
+                    str(self._directory / "%d.m4s"),
+                    str(self._playlist_path),
+                ],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+            )
+        except OSError as error:
+            self._process = None
+            self._accepting = False
+            self._finalized = True
+            self._error = f"Could not start HLS encoder: {error}"
+        self._worker = threading.Thread(
+            target=self._write_pcm,
+            name=f"voice-reader-hls-{generation}",
+            daemon=True,
+        )
+        self._worker.start()
+
+    def append(self, pcm: bytes) -> bool:
+        """Append PCM for the continuous encoder without waiting on a client."""
+        if not pcm:
+            return True
+        with self._changed:
+            if not self._accepting or self._aborted or self._error:
+                return False
+        self._encode_queue.put(bytes(pcm))
+        return True
+
+    def close(self) -> None:
+        """Finish the playlist after the encoder flushes its final segment."""
+        with self._changed:
+            if not self._accepting:
+                return
+            self._accepting = False
+        self._encode_queue.put(None)
+
+    def abort(self) -> None:
+        """Discard cached media when the user explicitly pauses or stops."""
+        with self._changed:
+            if self._aborted:
+                return
+            self._accepting = False
+            self._aborted = True
+            process = self._process
+            self._changed.notify_all()
+        if process is not None and process.poll() is None:
+            process.terminate()
+        self._encode_queue.put(None)
+
+    def playlist(self, timeout: float = 30.0) -> Optional[bytes]:
+        """Return the latest live playlist once its initial buffer is ready."""
+        deadline = time.monotonic() + timeout
+        while True:
+            with self._changed:
+                if self._aborted or self._error:
+                    return None
+                finalized = self._finalized
+            playlist = self._read_playlist()
+            if playlist is not None:
+                segments = [line for line in playlist.splitlines() if line.endswith(".m4s")]
+                if len(segments) >= _HLS_START_SEGMENTS or finalized:
+                    return self._rewrite_playlist(playlist)
+            if time.monotonic() >= deadline:
+                return None
+            time.sleep(0.1)
+
+    def segment(self, sequence: int) -> Optional[bytes]:
+        if sequence < 0:
+            return None
+        path = self._directory / f"{sequence}.m4s"
+        try:
+            return path.read_bytes()
+        except OSError:
+            return None
+
+    @property
+    def error(self) -> Optional[str]:
+        with self._changed:
+            return self._error
+
+    def _write_pcm(self) -> None:
+        process = self._process
+        try:
+            if process is None or process.stdin is None:
+                return
+            while True:
+                pcm = self._encode_queue.get()
+                if pcm is None:
+                    break
+                process.stdin.write(pcm)
+                process.stdin.flush()
+            process.stdin.close()
+            return_code = process.wait(timeout=20)
+            if return_code and not self._aborted:
+                detail = process.stderr.read().decode("utf-8", errors="replace").strip()
+                raise subprocess.SubprocessError(detail or f"FFmpeg exited with status {return_code}")
+        except (BrokenPipeError, OSError, subprocess.SubprocessError) as error:
+            with self._changed:
+                if not self._aborted:
+                    self._error = f"Could not encode HLS audio: {error}"
+        finally:
+            with self._changed:
+                self._finalized = True
+                aborted = self._aborted
+                self._changed.notify_all()
+            if process is not None and process.stderr is not None:
+                process.stderr.close()
+            if aborted:
+                shutil.rmtree(self._directory, ignore_errors=True)
+
+    def _read_playlist(self) -> Optional[str]:
+        try:
+            return self._playlist_path.read_text(encoding="utf-8")
+        except OSError:
+            return None
+
+    def initialization(self) -> Optional[bytes]:
+        try:
+            return (self._directory / "init.mp4").read_bytes()
+        except OSError:
+            return None
+
+    def _rewrite_playlist(self, playlist: str) -> bytes:
+        lines = []
+        for line in playlist.splitlines():
+            if line.endswith(".m4s"):
+                lines.append(f"/api/hls/{self.id}/segment/{line}")
+            elif line.startswith("#EXT-X-MAP:") and 'URI="init.mp4"' in line:
+                lines.append(line.replace('URI="init.mp4"', f'URI="/api/hls/{self.id}/init.mp4"'))
+            else:
+                lines.append(line)
+        return ("\n".join(lines) + "\n").encode("utf-8")
+
+
 class WebInterfaceServer:
     """Owns the browser server and the state shared with playback threads."""
 
@@ -98,6 +309,10 @@ class WebInterfaceServer:
         self._listeners: list["queue.Queue"] = []
         self._audio: dict[str, tuple[bytes, float]] = {}
         self._audio_waiters: dict[str, _AudioWaiter] = {}
+        self._ffmpeg_path = _ffmpeg_executable()
+        self._hls_enabled = False
+        self._hls_stream: Optional[_HLSStream] = None
+        self._hls_generation = 0
 
     @property
     def is_running(self) -> bool:
@@ -158,9 +373,13 @@ class WebInterfaceServer:
             self._audio.clear()
             waiters = list(self._audio_waiters.values())
             self._audio_waiters.clear()
+            hls_stream = self._hls_stream
+            self._hls_stream = None
             listeners = list(self._listeners)
             self._listeners.clear()
 
+        if hls_stream is not None:
+            hls_stream.abort()
         for waiter in waiters:
             waiter.event.set()
         for listener in listeners:
@@ -209,9 +428,16 @@ class WebInterfaceServer:
     def current_state(self) -> dict:
         with self._lock:
             playback_state = self._state.as_dict()
+            hls_stream = self._hls_stream
+
+        audio_state = {
+            "hls_url": f"/api/hls/{hls_stream.id}/playlist.m3u8" if hls_stream else "",
+            "hls_generation": hls_stream.generation if hls_stream else 0,
+        }
 
         app = self._get_app()
         if app is None:
+            playback_state["audio"] = audio_state
             return playback_state
 
         try:
@@ -238,6 +464,7 @@ class WebInterfaceServer:
             "remote": True,
             "message": "This shared session is managed by the desktop app.",
         }
+        state["audio"] = audio_state
         return state
 
     def begin_buffering(self, text: str) -> None:
@@ -307,6 +534,54 @@ class WebInterfaceServer:
             self._state.voice = ""
             self._state.buffered_items.clear()
         self._broadcast("state", self.current_state())
+
+    def set_audio_capabilities(self, hls: bool) -> dict:
+        """Select HLS only when the connected browser supports native playback."""
+        enabled = bool(hls and self._ffmpeg_path)
+        with self._lock:
+            self._hls_enabled = enabled
+        return {
+            "ok": True,
+            "hls": enabled,
+            **({"message": "HLS encoding is unavailable; using WAV clips."} if hls and not enabled else {}),
+        }
+
+    @property
+    def hls_audio_enabled(self) -> bool:
+        with self._lock:
+            return self._hls_enabled
+
+    def prepare_hls_audio(self) -> Optional[str]:
+        """Create a fresh server-owned live playlist for a browser read."""
+        with self._lock:
+            if not self._hls_enabled or not self._ffmpeg_path or not self.is_running:
+                return None
+            previous = self._hls_stream
+            self._hls_generation += 1
+            stream = _HLSStream(self._hls_generation, self._ffmpeg_path)
+            self._hls_stream = stream
+
+        if previous is not None:
+            previous.abort()
+        url = f"/api/hls/{stream.id}/playlist.m3u8"
+        self._broadcast("hls-stream", {"url": url, "generation": stream.generation})
+        return url
+
+    def append_hls_audio(self, pcm: bytes) -> bool:
+        with self._lock:
+            stream = self._hls_stream
+        return bool(stream and stream.append(pcm))
+
+    def finish_hls_audio(self) -> None:
+        with self._lock:
+            stream = self._hls_stream
+        if stream is not None:
+            stream.close()
+
+    def get_hls_stream(self, stream_id: str) -> Optional[_HLSStream]:
+        with self._lock:
+            stream = self._hls_stream
+            return stream if stream and stream.id == stream_id else None
 
     def publish_wav(self, pcm: bytes, duration: float, volume: float) -> Optional[str]:
         """Publish one complete, standards-compliant WAV clip to the browser.
@@ -397,6 +672,10 @@ class WebInterfaceServer:
             waiters = list(self._audio_waiters.values())
             self._audio_waiters.clear()
             self._audio.clear()
+            hls_stream = self._hls_stream
+            self._hls_stream = None
+        if hls_stream is not None:
+            hls_stream.abort()
         for waiter in waiters:
             waiter.event.set()
         self._broadcast("audio-stop", {})
@@ -551,6 +830,45 @@ class _WebRequestHandler(BaseHTTPRequestHandler):
         if self.path == "/api/events":
             self._serve_events()
             return
+        path = urlsplit(self.path).path
+        if path.startswith("/api/hls/"):
+            parts = path.split("/")
+            if len(parts) == 5 and parts[4] == "playlist.m3u8":
+                stream = self.web_interface.get_hls_stream(parts[3])
+                playlist = stream.playlist() if stream else None
+                if playlist is None:
+                    self._send(
+                        HTTPStatus.SERVICE_UNAVAILABLE,
+                        "text/plain; charset=utf-8",
+                        (stream.error if stream and stream.error else "HLS stream is not ready").encode("utf-8"),
+                    )
+                else:
+                    self._send(
+                        HTTPStatus.OK,
+                        "application/vnd.apple.mpegurl",
+                        playlist,
+                    )
+                return
+            if len(parts) == 5 and parts[4] == "init.mp4":
+                stream = self.web_interface.get_hls_stream(parts[3])
+                content = stream.initialization() if stream else None
+                if content is None:
+                    self._send(HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8", b"HLS initialization expired")
+                else:
+                    self._send(HTTPStatus.OK, "audio/mp4", content)
+                return
+            if len(parts) == 6 and parts[4] == "segment" and parts[5].endswith(".m4s"):
+                stream = self.web_interface.get_hls_stream(parts[3])
+                try:
+                    sequence = int(parts[5].removesuffix(".m4s"))
+                except ValueError:
+                    sequence = -1
+                content = stream.segment(sequence) if stream and sequence >= 0 else None
+                if content is None:
+                    self._send(HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8", b"HLS segment expired")
+                else:
+                    self._send(HTTPStatus.OK, "video/iso.segment", content)
+                return
         if self.path.startswith("/api/audio/") and self.path.endswith(".wav"):
             audio_id = self.path.removeprefix("/api/audio/").removesuffix(".wav")
             audio = self.web_interface.get_audio(audio_id)
@@ -566,6 +884,29 @@ class _WebRequestHandler(BaseHTTPRequestHandler):
         self._send(HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8", b"Not found")
 
     def do_POST(self) -> None:
+        if self.path == "/api/audio-capabilities":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if length > 1_000:
+                    raise ValueError("Request is too large.")
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                hls = payload.get("hls") if isinstance(payload, dict) else None
+                if not isinstance(hls, bool):
+                    raise ValueError("HLS capability is required.")
+            except (UnicodeDecodeError, ValueError, json.JSONDecodeError) as error:
+                self._send(
+                    HTTPStatus.BAD_REQUEST,
+                    "application/json; charset=utf-8",
+                    json.dumps({"ok": False, "message": str(error)}).encode("utf-8"),
+                )
+                return
+            result = self.web_interface.set_audio_capabilities(hls)
+            self._send(
+                HTTPStatus.OK,
+                "application/json; charset=utf-8",
+                json.dumps(result).encode("utf-8"),
+            )
+            return
         if self.path == "/api/audio-complete":
             try:
                 length = int(self.headers.get("Content-Length", "0"))

@@ -424,6 +424,22 @@ class VoiceReaderUI:
         if self.is_web_audio_active():
             self.web_server.seek_line(start_line, end_line)
 
+    def web_uses_hls_audio(self) -> bool:
+        return bool(self.is_web_audio_active() and self.web_server.hls_audio_enabled)
+
+    def web_prepare_hls_audio(self) -> None:
+        if self.web_uses_hls_audio():
+            self.web_server.prepare_hls_audio()
+
+    def web_stream_hls_audio(self, pcm: bytes) -> bool:
+        return bool(
+            self.web_uses_hls_audio() and self.web_server.append_hls_audio(pcm)
+        )
+
+    def web_finish_hls_audio(self) -> None:
+        if self.web_uses_hls_audio():
+            self.web_server.finish_hls_audio()
+
     def web_send_audio(self, pcm: bytes, duration: float, volume: float):
         if self.is_web_audio_active():
             return self.web_server.publish_wav(pcm, duration, volume)

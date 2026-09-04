@@ -97,12 +97,18 @@ URL to open on a trusted device. Select **Stop sharing** when finished. While
 sharing is running, generated audio is sent to the connected browser instead of
 the computer speakers. The browser offers Play, Pause, Stop, Back, and Forward
 controls and displays the current highlighted text and active voice. On mobile,
-tap **Play** in the browser to authorize audio. The browser queues complete WAV
-clips on one persistent audio player, which is supported by mobile media
-engines. Whether it can continue while the page is backgrounded or the screen
-is locked depends on the browser and operating system. A phone call, another
-app taking audio focus, or an operating-system-level media restriction can
-still interrupt any browser-based player.
+tap **Play** in the browser to authorize audio. Compatible mobile browsers use
+a live HLS stream: the desktop app continuously adds AAC media segments to a
+server-side cache while the phone's native player reads and buffers the
+playlist. This avoids relying on page JavaScript to start every sentence when
+the screen is locked. The initial mobile buffer is about six seconds and the
+server retains about 90 seconds of recent media. Browsers without native HLS
+support fall back to complete WAV clips. HLS encoding requires `ffmpeg` to be
+available on the desktop app's `PATH` when running from source. The provided
+export build bundles it with the application.
+
+Phone calls, another app taking audio focus, or an operating-system-level media
+restriction can still interrupt any browser-based player.
 
 The server is intended for a trusted local network. Stop it when it is no longer
 needed.

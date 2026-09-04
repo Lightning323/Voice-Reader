@@ -1,10 +1,15 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import shutil
+
+
+ffmpeg_path = shutil.which('ffmpeg')
+bundled_binaries = [(ffmpeg_path, '.')] if ffmpeg_path else []
 
 a = Analysis(
     ['main.py'],
     pathex=[],
-    binaries=[],
+    binaries=bundled_binaries,
     datas=[('webapp', 'webapp'), ('icon', 'icon')],
     hiddenimports=[],
     hookspath=[],

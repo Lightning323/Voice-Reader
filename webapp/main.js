@@ -23,6 +23,8 @@ let audioEpoch = 0;
 let audioPrimed = false;
 let audioStartNeedsGesture = false;
 let silentAudioUrl = null;
+let pendingHlsStream = null;
+let hlsGeneration = 0;
 
 function setMediaSessionPlaybackState(playbackState) {
   if (!remoteMode || !('mediaSession' in navigator)) return;
@@ -105,6 +107,7 @@ async function remoteRequest(path, payload) {
 async function remoteCall(method, ...args) {
   if (method === 'get_state') return remoteRequest('/api/state');
   if (method === 'control') return remoteRequest('/api/control', { action: args[0], ...(args[1] !== undefined ? { text: args[1] } : {}) });
+  if (method === 'set_audio_capabilities') return remoteRequest('/api/audio-capabilities', { hls: Boolean(args[0]) });
   if (method === 'read_clipboard') {
     try { return await readBrowserClipboard(); }
     catch (_) {
@@ -336,6 +339,10 @@ function applyState(next) {
   script.style.fontSize = `${size}px`; highlights.style.fontSize = `${size}px`;
   document.querySelectorAll('[data-font-size]').forEach((element) => { element.textContent = `${size}px`; });
   const server = state.server || {};
+  const activeHls = state.audio || {};
+  if (remoteMode && activeHls.hls_url) {
+    queueHlsStream(activeHls.hls_url, activeHls.hls_generation);
+  }
   const remoteSession = Boolean(server.remote);
   $('#server-toggle .button-label').textContent = remoteSession ? 'Web' : (server.running ? 'Stop' : 'Start');
 
@@ -367,6 +374,7 @@ async function control(action) {
       // Once this element is primed, Safari permits source changes on it.
       void unlockAudio().then(() => {
         audioPrimed = true;
+        void startPendingHlsStream();
         void playNextAudio();
       }).catch((error) => {
         audioPrimed = false;
@@ -431,6 +439,49 @@ function resetAudioPlayer() {
   audioPlayer.load();
 }
 
+function supportsNativeHls() {
+  return Boolean(
+    audioPlayer.canPlayType('application/vnd.apple.mpegurl')
+    || audioPlayer.canPlayType('audio/mpegurl')
+  );
+}
+
+function queueHlsStream(url, generation = hlsGeneration) {
+  if (Number.isFinite(generation) && generation < hlsGeneration) return;
+  if (Number.isFinite(generation)) hlsGeneration = generation;
+  const streamUrl = new URL(url, window.location.href).href;
+  if (currentAudio?.transport === 'hls' && currentAudio.url === streamUrl) return;
+  if (pendingHlsStream?.url === streamUrl) return;
+  pendingHlsStream = {
+    url: streamUrl,
+    generation: hlsGeneration,
+    transport: 'hls',
+    epoch: audioEpoch,
+  };
+  void startPendingHlsStream();
+}
+
+async function startPendingHlsStream() {
+  if (!audioPrimed || !pendingHlsStream) return;
+  const item = pendingHlsStream;
+  if (currentAudio?.transport === 'hls' && currentAudio.url === item.url && audioPlaying) return;
+  pendingHlsStream = null;
+  if (currentAudio) resetAudioPlayer();
+  audioPlaying = true;
+  currentAudio = item;
+  updateMediaSession();
+  try {
+    audioPlayer.loop = false;
+    audioPlayer.src = item.url;
+    audioPlayer.volume = 1;
+    audioPlayer.load();
+    await audioPlayer.play();
+    if (currentAudio === item) updateMediaSession();
+  } catch (error) {
+    failAudio(item, error);
+  }
+}
+
 async function acknowledgeAudio(id) {
   try { await remoteRequest('/api/audio-complete', { id }); }
   catch (error) { notify(`Could not confirm audio playback: ${error?.message || 'connection lost.'}`, true); }
@@ -441,7 +492,8 @@ function failAudio(item, error) {
   // Do not send Pause to the desktop reader here. The previous failure path
   // did that, turning a mobile decoding or autoplay rejection into an
   // immediate app-wide pause. Keep the finite clip ready for a user retry.
-  audioQueue.unshift({ id: item.id, url: item.url, volume: item.volume });
+  if (item.transport === 'hls') pendingHlsStream = item;
+  else audioQueue.unshift({ id: item.id, url: item.url, volume: item.volume });
   audioPrimed = false;
   audioStartNeedsGesture = true;
   resetAudioPlayer();
@@ -474,6 +526,7 @@ audioPlayer.addEventListener('ended', () => {
   currentAudio = null;
   audioPlaying = false;
   updateMediaSession();
+  if (item.transport === 'hls') return;
   void acknowledgeAudio(item.id);
   void playNextAudio();
 });
@@ -663,9 +716,17 @@ splitter.addEventListener('pointerdown', (event) => {
 async function startRemoteSession() {
   try {
     configureMediaSession();
+    const capabilities = await bridge('set_audio_capabilities', supportsNativeHls());
+    if (supportsNativeHls() && !capabilities.hls && capabilities.message) {
+      notify(capabilities.message, true);
+    }
     applyState(await bridge('get_state'));
     const events = new EventSource('/api/events');
     events.addEventListener('state', (event) => applyState(JSON.parse(event.data)));
+    events.addEventListener('hls-stream', (event) => {
+      const { url, generation } = JSON.parse(event.data);
+      if (url) queueHlsStream(url, generation);
+    });
     events.addEventListener('audio', (event) => {
       audioQueue.push(JSON.parse(event.data));
       void playNextAudio();
@@ -675,6 +736,7 @@ async function startRemoteSession() {
       audioQueue = [];
       audioPrimed = false;
       audioStartNeedsGesture = false;
+      pendingHlsStream = null;
       resetAudioPlayer();
       setMediaSessionPlaybackState('paused');
     });

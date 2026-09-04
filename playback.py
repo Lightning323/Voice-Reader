@@ -62,6 +62,10 @@ def start_playback(readerUI):
     with playback_state_lock:
         allow_playback = True
         play_event.set()
+        # A shared mobile browser that supports HLS receives one server-owned
+        # live playlist. Desktop playback and browser fallbacks keep their
+        # existing paths.
+        readerUI.web_prepare_hls_audio()
 
     print("Started")
     readerUI.playback_mode(True)
@@ -115,6 +119,7 @@ def finish_playback(readerUI):
         cached_text = ""
         generation_stop.set()
 
+    readerUI.web_finish_hls_audio()
     readerUI.playback_mode(False)
     readerUI.set_status("Stopped")
 
@@ -266,6 +271,9 @@ def play_web_audio(readerUI, audio_chunks, volume_multiplier, end_offset):
     complete files instead, which preserves the user-gesture permission while
     giving every device a normal WAV resource to decode.
     """
+    if readerUI.web_uses_hls_audio():
+        return play_hls_audio(readerUI, audio_chunks, volume_multiplier, end_offset)
+
     clips = []
 
     if audio_chunks is None:
@@ -296,6 +304,33 @@ def play_web_audio(readerUI, audio_chunks, volume_multiplier, end_offset):
         if not readerUI.web_wait_for_audio(audio_id) or not allow_playback:
             return True
     return False
+
+
+def play_hls_audio(readerUI, audio_chunks, volume_multiplier, end_offset):
+    """Append PCM to the server-side HLS cache without browser callbacks."""
+    if audio_chunks is None:
+        duration = max(1, 1 + end_offset)
+        pcm = b"\0\0" * round(duration * 24000)
+        if not readerUI.web_stream_hls_audio(pcm):
+            return True
+        return delay_unless_interrupted(None, duration)
+
+    pcm_parts = []
+    duration = 0.0
+    for audio in audio_chunks:
+        pcm = np.clip(
+            audio.detach().cpu().numpy().flatten() * volume_multiplier * 32767,
+            -32768,
+            32767,
+        ).astype(np.int16)
+        pcm_parts.append(pcm.tobytes())
+        duration += len(pcm) / 24000
+
+    pause_duration = max(0.01, end_offset)
+    pcm_parts.append(b"\0\0" * round(pause_duration * 24000))
+    if not readerUI.web_stream_hls_audio(b"".join(pcm_parts)):
+        return True
+    return delay_unless_interrupted(None, duration + pause_duration)
 
 """
 Returns True if interrupted

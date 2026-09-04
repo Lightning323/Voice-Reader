@@ -3,12 +3,13 @@
 import io
 import json
 import queue
+import shutil
 import socket
 import unittest
 import urllib.request
 import wave
 
-from web_interface import WebInterfaceServer
+from web_interface import _HLS_BYTES_PER_SECOND, _HLSStream, WebInterfaceServer
 
 
 class BrowserAudioTests(unittest.TestCase):
@@ -65,6 +66,69 @@ class BrowserAudioTests(unittest.TestCase):
                 self.assertEqual(response.headers["Content-Type"], "audio/wav")
                 self.assertEqual(int(response.headers["Content-Length"]), len(content))
                 self.assertEqual(content[:4], b"RIFF")
+        finally:
+            server.stop()
+
+    @unittest.skipUnless(shutil.which("ffmpeg"), "FFmpeg is required for HLS encoding")
+    def test_hls_stream_buffers_native_player_segments(self):
+        stream = _HLSStream(generation=1, ffmpeg_path=shutil.which("ffmpeg"))
+        stream.append(b"\0\0" * round(_HLS_BYTES_PER_SECOND * 6 / 2))
+        stream.close()
+
+        playlist = stream.playlist(timeout=30)
+
+        self.assertIsNotNone(playlist)
+        text = playlist.decode("utf-8")
+        self.assertIn("#EXTM3U", text)
+        self.assertIn("#EXT-X-ENDLIST", text)
+        self.assertIn('/init.mp4"', text)
+        self.assertIn("/segment/0.m4s", text)
+        self.assertEqual(stream.initialization()[4:8], b"ftyp")
+        self.assertEqual(stream.segment(0)[4:8], b"styp")
+
+    @unittest.skipUnless(shutil.which("ffmpeg"), "FFmpeg is required for HLS encoding")
+    def test_hls_endpoints_serve_a_playlist_and_mp4_audio_segments(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+
+        server = WebInterfaceServer(lambda: None)
+        started, _ = server.start(port)
+        self.assertTrue(started)
+        try:
+            self.assertTrue(server.set_audio_capabilities(True)["hls"])
+            playlist_url = server.prepare_hls_audio()
+            self.assertIsNotNone(playlist_url)
+            self.assertTrue(
+                server.append_hls_audio(
+                    b"\0\0" * round(_HLS_BYTES_PER_SECOND * 6 / 2)
+                )
+            )
+            server.finish_hls_audio()
+            with urllib.request.urlopen(
+                f"http://127.0.0.1:{port}{playlist_url}"
+            ) as response:
+                playlist = response.read().decode("utf-8")
+                self.assertEqual(
+                    response.headers["Content-Type"],
+                    "application/vnd.apple.mpegurl",
+                )
+            init_path = next(
+                line.split('URI="', 1)[1].removesuffix('"')
+                for line in playlist.splitlines()
+                if line.startswith("#EXT-X-MAP:")
+            )
+            with urllib.request.urlopen(
+                f"http://127.0.0.1:{port}{init_path}"
+            ) as response:
+                self.assertEqual(response.headers["Content-Type"], "audio/mp4")
+                self.assertEqual(response.read()[4:8], b"ftyp")
+            segment_path = next(line for line in playlist.splitlines() if line.endswith(".m4s"))
+            with urllib.request.urlopen(
+                f"http://127.0.0.1:{port}{segment_path}"
+            ) as response:
+                self.assertEqual(response.headers["Content-Type"], "video/iso.segment")
+                self.assertEqual(response.read()[4:8], b"styp")
         finally:
             server.stop()
 
