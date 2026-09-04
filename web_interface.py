@@ -39,9 +39,20 @@ def _ffmpeg_executable() -> Optional[str]:
     if bundle:
         name = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
         bundled = os.path.join(bundle, name)
-        if os.path.isfile(bundled):
+        if os.path.isfile(bundled) and os.access(bundled, os.X_OK):
             return bundled
-    return shutil.which("ffmpeg")
+
+    # Desktop launchers often provide a much smaller PATH than an interactive
+    # terminal. Check standard system locations as well as PATH so an installed
+    # encoder is still found when the GUI starts from an application menu.
+    configured = os.environ.get("VOICE_READER_FFMPEG")
+    candidates = [configured, shutil.which("ffmpeg")]
+    if os.name != "nt":
+        candidates.extend(("/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg", "/opt/homebrew/bin/ffmpeg"))
+    for candidate in candidates:
+        if candidate and os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    return None
 
 
 # The desktop UI reads these files directly from disk. The sharing server uses

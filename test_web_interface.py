@@ -2,13 +2,16 @@
 
 import io
 import json
+import os
 import queue
 import shutil
 import socket
 import unittest
 import urllib.request
 import wave
+from unittest import mock
 
+import web_interface
 from web_interface import _HLS_BYTES_PER_SECOND, _HLSStream, WebInterfaceServer
 
 
@@ -20,6 +23,11 @@ class BrowserAudioTests(unittest.TestCase):
         self.server._server = object()
         self.listener = queue.Queue()
         self.server.add_listener(self.listener)
+
+    @unittest.skipUnless(os.path.isfile("/usr/bin/ffmpeg"), "Linux FFmpeg is required")
+    def test_ffmpeg_lookup_survives_a_reduced_desktop_launcher_path(self):
+        with mock.patch("web_interface.shutil.which", return_value=None):
+            self.assertEqual(web_interface._ffmpeg_executable(), "/usr/bin/ffmpeg")
 
     def test_published_audio_is_a_complete_wav_clip(self):
         pcm = b"\0\0" * 240
