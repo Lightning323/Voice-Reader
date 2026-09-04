@@ -8,4 +8,8 @@ if [ -z "$ffmpeg_path" ]; then
   exit 1
 fi
 
-pyinstaller --onefile --windowed --add-binary "$ffmpeg_path:." main.py
+pyinstaller --onefile --windowed \
+  --add-binary "$ffmpeg_path:." \
+  --add-data "webapp:webapp" \
+  --add-data "icon:icon" \
+  main.py

@@ -1,1 +1,6 @@
+This application includes hls.js 1.6.15 for HLS playback in browsers that
+support Media Source Extensions but do not natively support HLS.
 
+hls.js is Copyright (c) 2017 Dailymotion and is licensed under the Apache
+License, Version 2.0. Its full license notice is included at
+webapp/vendor/hls.LICENSE.

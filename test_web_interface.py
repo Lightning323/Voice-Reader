@@ -6,6 +6,8 @@ import os
 import queue
 import shutil
 import socket
+import threading
+import time
 import unittest
 import urllib.request
 import wave
@@ -55,6 +57,21 @@ class BrowserAudioTests(unittest.TestCase):
 
         self.assertFalse(self.server.wait_for_audio(audio_id))
 
+    def test_audio_transport_has_one_owner_until_that_browser_releases_it(self):
+        owner = self.server.set_audio_capabilities(True, "phone-a")
+        rejected = self.server.set_audio_capabilities(False, "phone-b")
+
+        self.assertTrue(owner["ok"])
+        self.assertTrue(owner["hls"])
+        self.assertFalse(rejected["ok"])
+        self.assertTrue(self.server.hls_audio_enabled)
+
+        self.server.release_audio_client("phone-a")
+        replacement = self.server.set_audio_capabilities(False, "phone-b")
+
+        self.assertTrue(replacement["ok"])
+        self.assertFalse(replacement["hls"])
+
     def test_audio_endpoint_returns_a_finite_response(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
             probe.bind(("127.0.0.1", 0))
@@ -74,6 +91,70 @@ class BrowserAudioTests(unittest.TestCase):
                 self.assertEqual(response.headers["Content-Type"], "audio/wav")
                 self.assertEqual(int(response.headers["Content-Length"]), len(content))
                 self.assertEqual(content[:4], b"RIFF")
+        finally:
+            server.stop()
+
+    def test_hls_media_source_player_is_served_locally(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+
+        server = WebInterfaceServer(lambda: None)
+        started, _ = server.start(port)
+        self.assertTrue(started)
+        try:
+            with urllib.request.urlopen(
+                f"http://127.0.0.1:{port}/vendor/hls.min.js"
+            ) as response:
+                bundle = response.read()
+                self.assertEqual(
+                    response.headers["Content-Type"],
+                    "application/javascript; charset=utf-8",
+                )
+                self.assertIn(b"function", bundle[:100])
+        finally:
+            server.stop()
+
+    @unittest.skipUnless(shutil.which("ffmpeg"), "FFmpeg is required for HLS encoding")
+    def test_live_playlist_can_wait_for_the_stream_created_by_play(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+
+        server = WebInterfaceServer(lambda: None)
+        started, _ = server.start(port)
+        self.assertTrue(started)
+        response_queue = queue.Queue()
+
+        def request_live_playlist():
+            try:
+                with urllib.request.urlopen(
+                    f"http://127.0.0.1:{port}/api/hls/live/playlist.m3u8",
+                    timeout=35,
+                ) as response:
+                    response_queue.put((response.status, response.read()))
+            except Exception as error:  # pragma: no cover - asserted below
+                response_queue.put(error)
+
+        try:
+            self.assertTrue(server.set_audio_capabilities(True)["hls"])
+            request_thread = threading.Thread(target=request_live_playlist)
+            request_thread.start()
+            time.sleep(0.15)
+
+            self.assertTrue(server.prepare_hls_audio())
+            self.assertTrue(
+                server.append_hls_audio(
+                    b"\0\0" * round(_HLS_BYTES_PER_SECOND * 6 / 2)
+                )
+            )
+            server.finish_hls_audio()
+            request_thread.join(timeout=35)
+
+            self.assertFalse(request_thread.is_alive())
+            result = response_queue.get_nowait()
+            self.assertEqual(result[0], 200)
+            self.assertIn(b"#EXTM3U", result[1])
         finally:
             server.stop()
 
@@ -113,8 +194,10 @@ class BrowserAudioTests(unittest.TestCase):
                 )
             )
             server.finish_hls_audio()
+            # The browser starts this stable URL inside the user gesture, before
+            # the desktop has created the UUID-specific playlist route.
             with urllib.request.urlopen(
-                f"http://127.0.0.1:{port}{playlist_url}"
+                f"http://127.0.0.1:{port}/api/hls/live/playlist.m3u8"
             ) as response:
                 playlist = response.read().decode("utf-8")
                 self.assertEqual(

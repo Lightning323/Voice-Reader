@@ -100,10 +100,12 @@ controls and displays the current highlighted text and active voice. On mobile,
 tap **Play** in the browser to authorize audio. Compatible mobile browsers use
 a live HLS stream: the desktop app continuously adds AAC media segments to a
 server-side cache while the phone's native player reads and buffers the
-playlist. This avoids relying on page JavaScript to start every sentence when
-the screen is locked. The initial mobile buffer is about six seconds and the
-server retains about 90 seconds of recent media. Browsers without native HLS
-support fall back to complete WAV clips. HLS encoding requires `ffmpeg` to be
+playlist. Android browsers use the bundled HLS Media Source player when they
+do not offer native HLS. This avoids relying on page JavaScript to start every
+sentence when the screen is locked on browsers with native HLS. The initial
+mobile buffer is about six seconds and the server retains about 90 seconds of
+recent media. Browsers that support neither native HLS nor Media Source HLS
+fall back to complete WAV clips. HLS encoding requires `ffmpeg` to be
 available on the desktop app's `PATH` when running from source. The provided
 export build bundles it with the application.
 

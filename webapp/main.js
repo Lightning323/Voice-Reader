@@ -25,6 +25,45 @@ let audioStartNeedsGesture = false;
 let silentAudioUrl = null;
 let pendingHlsStream = null;
 let hlsGeneration = 0;
+let selectedHlsTransport = null;
+let hlsPlayer = null;
+
+function getAudioClientId() {
+  if (!remoteMode) return 'desktop-preview';
+  const storageKey = 'voice-reader-audio-client-id';
+  try {
+    let clientId = sessionStorage.getItem(storageKey);
+    if (!clientId) {
+      clientId = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+      sessionStorage.setItem(storageKey, clientId);
+    }
+    return clientId;
+  } catch (_) {
+    return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+  }
+}
+
+const audioClientId = getAudioClientId();
+
+function hlsLog(message, details = {}) {
+  console.info(`[HLS] ${message}`, {
+    ...details,
+    url: window.location.href,
+    userAgent: navigator.userAgent,
+  });
+}
+
+function hlsError(message, error, details = {}) {
+  console.error(`[HLS] ${message}`, {
+    ...details,
+    error: error?.message || String(error || 'unknown error'),
+    mediaErrorCode: audioPlayer.error?.code,
+    mediaErrorMessage: audioPlayer.error?.message,
+    networkState: audioPlayer.networkState,
+    readyState: audioPlayer.readyState,
+    src: audioPlayer.currentSrc || audioPlayer.src,
+  });
+}
 
 function setMediaSessionPlaybackState(playbackState) {
   if (!remoteMode || !('mediaSession' in navigator)) return;
@@ -107,7 +146,10 @@ async function remoteRequest(path, payload) {
 async function remoteCall(method, ...args) {
   if (method === 'get_state') return remoteRequest('/api/state');
   if (method === 'control') return remoteRequest('/api/control', { action: args[0], ...(args[1] !== undefined ? { text: args[1] } : {}) });
-  if (method === 'set_audio_capabilities') return remoteRequest('/api/audio-capabilities', { hls: Boolean(args[0]) });
+  if (method === 'set_audio_capabilities') return remoteRequest('/api/audio-capabilities', {
+    hls: Boolean(args[0]),
+    client_id: audioClientId,
+  });
   if (method === 'read_clipboard') {
     try { return await readBrowserClipboard(); }
     catch (_) {
@@ -368,19 +410,31 @@ window.VoiceReaderDesktop = { applyState };
 async function control(action) {
   try {
     if (remoteMode && action === 'play') {
+      hlsLog('user pressed Play', {
+        pendingStream: pendingHlsStream?.url || null,
+        nativeHls: supportsNativeHls(),
+        selectedHlsTransport,
+      });
       audioStartNeedsGesture = false;
-      // Call play() synchronously from this tap. Awaiting it before making the
-      // call to play the first real clip would lose the mobile user gesture.
-      // Once this element is primed, Safari permits source changes on it.
-      void unlockAudio().then(() => {
+      // HLS must be loaded and played in this exact tap. The desktop receives
+      // the control request only afterwards, then creates the stream that the
+      // stable /api/hls/live playlist endpoint waits for.
+      if (selectedHlsTransport) {
         audioPrimed = true;
         void startPendingHlsStream();
-        void playNextAudio();
-      }).catch((error) => {
-        audioPrimed = false;
-        audioStartNeedsGesture = true;
-        notify(`Audio needs a tap to start: ${error?.message || 'playback was blocked.'}`, true);
-      });
+      } else {
+        // WAV clips are created after this request reaches the desktop, so
+        // retain a silent loop to preserve this media element's authorization.
+        void unlockAudio().then(() => {
+          audioPrimed = true;
+          void playNextAudio();
+        }).catch((error) => {
+          hlsError('the silent audio unlock failed', error);
+          audioPrimed = false;
+          audioStartNeedsGesture = true;
+          notify(`Audio needs a tap to start: ${error?.message || 'playback was blocked.'}`, true);
+        });
+      }
     }
     const result = await bridge('control', action, script.value);
     if (!result.ok) notify(result.message || 'The command could not be completed.', true);
@@ -431,6 +485,7 @@ async function keepAudioSessionAlive() {
 }
 
 function resetAudioPlayer() {
+  destroyHlsPlayer();
   currentAudio = null;
   audioPlaying = false;
   audioPlayer.loop = false;
@@ -440,44 +495,157 @@ function resetAudioPlayer() {
 }
 
 function supportsNativeHls() {
-  return Boolean(
-    audioPlayer.canPlayType('application/vnd.apple.mpegurl')
-    || audioPlayer.canPlayType('audio/mpegurl')
-  );
+  const supported = [
+    'application/vnd.apple.mpegurl',
+    'application/x-mpegURL',
+    'application/x-mpegurl',
+    'audio/mpegurl',
+    'audio/x-mpegurl',
+  ].some((mimeType) => Boolean(audioPlayer.canPlayType(mimeType)));
+  return supported;
+}
+
+function isMobileDevice() {
+  return /Android|iPhone|iPad|iPod|IEMobile|Opera Mini/i.test(navigator.userAgent)
+    || (navigator.maxTouchPoints > 1 && window.matchMedia('(pointer: coarse)').matches);
+}
+
+function supportsMseHls() {
+  return Boolean(window.Hls && window.Hls.isSupported());
+}
+
+function getHlsTransport() {
+  if (supportsNativeHls()) return 'native';
+  if (supportsMseHls()) return 'mse';
+  return null;
+}
+
+function shouldUseHls() {
+  // A device may use HLS only if this page has an actual implementation for
+  // it: the native media element or the bundled Media Source player. Device
+  // type alone cannot decode a playlist.
+  return getHlsTransport() !== null;
+}
+
+function liveHlsUrl() {
+  return new URL('/api/hls/live/playlist.m3u8', window.location.href).href;
+}
+
+function destroyHlsPlayer() {
+  if (!hlsPlayer) return;
+  try { hlsPlayer.destroy(); }
+  catch (error) { hlsError('could not destroy the Media Source HLS player', error); }
+  hlsPlayer = null;
+}
+
+function prepareHlsStream(item) {
+  if (item.prepared) return true;
+  const transport = item.player || getHlsTransport();
+  if (!transport) {
+    hlsLog('ignored an HLS stream because this browser has no HLS implementation', { streamUrl: item.url });
+    return false;
+  }
+
+  item.player = transport;
+  audioPlayer.loop = false;
+  audioPlayer.volume = 1;
+  if (transport === 'native') {
+    audioPlayer.src = item.url;
+    audioPlayer.load();
+    item.prepared = true;
+    hlsLog('prepared the native HLS media source', { streamUrl: item.url });
+    return true;
+  }
+
+  destroyHlsPlayer();
+  const player = new window.Hls({
+    enableWorker: true,
+    liveSyncDurationCount: 3,
+    maxBufferLength: 90,
+  });
+  hlsPlayer = player;
+  player.on(window.Hls.Events.MEDIA_ATTACHED, () => {
+    hlsLog('Media Source attached; loading HLS playlist', { streamUrl: item.url });
+    player.loadSource(item.url);
+  });
+  player.on(window.Hls.Events.MANIFEST_PARSED, (_, data) => {
+    hlsLog('Media Source parsed the HLS playlist', { streamUrl: item.url, levels: data.levels?.length || 0 });
+  });
+  player.on(window.Hls.Events.ERROR, (_, data) => {
+    hlsError('Media Source HLS player error', data?.error || data?.details, {
+      streamUrl: item.url,
+      type: data?.type,
+      details: data?.details,
+      fatal: data?.fatal,
+      responseCode: data?.response?.code,
+    });
+    if (data?.fatal) failAudio(item, data?.error || new Error(data?.details || 'fatal HLS player error'));
+  });
+  player.attachMedia(audioPlayer);
+  item.prepared = true;
+  hlsLog('prepared the Media Source HLS player', { streamUrl: item.url });
+  return true;
 }
 
 function queueHlsStream(url, generation = hlsGeneration) {
   if (Number.isFinite(generation) && generation < hlsGeneration) return;
   if (Number.isFinite(generation)) hlsGeneration = generation;
   const streamUrl = new URL(url, window.location.href).href;
-  if (currentAudio?.transport === 'hls' && currentAudio.url === streamUrl) return;
+  if (currentAudio?.transport === 'hls' && (currentAudio.url === streamUrl || currentAudio.url === liveHlsUrl())) return;
   if (pendingHlsStream?.url === streamUrl) return;
+  hlsLog('received a server HLS stream announcement', { streamUrl, generation });
   pendingHlsStream = {
     url: streamUrl,
     generation: hlsGeneration,
     transport: 'hls',
     epoch: audioEpoch,
   };
-  void startPendingHlsStream();
+  prepareHlsStream(pendingHlsStream);
+  if (audioPrimed) void startPendingHlsStream();
 }
 
 async function startPendingHlsStream() {
-  if (!audioPrimed || !pendingHlsStream) return;
+  if (!audioPrimed) return;
+  if (!pendingHlsStream && selectedHlsTransport) {
+    // The source URL is stable before a generation exists. Its server request
+    // blocks until this tap's Play control creates the actual HLS stream.
+    pendingHlsStream = {
+      url: liveHlsUrl(),
+      generation: hlsGeneration,
+      transport: 'hls',
+      player: selectedHlsTransport,
+      epoch: audioEpoch,
+    };
+  }
+  if (!pendingHlsStream) return;
   const item = pendingHlsStream;
   if (currentAudio?.transport === 'hls' && currentAudio.url === item.url && audioPlaying) return;
+  if (!prepareHlsStream(item)) {
+    pendingHlsStream = null;
+    audioPrimed = false;
+    audioStartNeedsGesture = true;
+    notify('This browser cannot play the live HLS stream; using WAV clips instead.', true);
+    return;
+  }
   pendingHlsStream = null;
-  if (currentAudio) resetAudioPlayer();
+  if (currentAudio) {
+    resetAudioPlayer();
+    item.prepared = false;
+    if (!prepareHlsStream(item)) return;
+  }
   audioPlaying = true;
   currentAudio = item;
+  hlsLog('starting HLS stream in the media element', { streamUrl: item.url, generation: item.generation });
   updateMediaSession();
   try {
     audioPlayer.loop = false;
-    audioPlayer.src = item.url;
     audioPlayer.volume = 1;
-    audioPlayer.load();
+    // The play() invocation happens synchronously while handling the tap.
+    // Do not await any network or server operation before this line.
     await audioPlayer.play();
     if (currentAudio === item) updateMediaSession();
   } catch (error) {
+    hlsError('HLS media playback failed to start', error, { streamUrl: item.url, generation: item.generation });
     failAudio(item, error);
   }
 }
@@ -489,10 +657,18 @@ async function acknowledgeAudio(id) {
 
 function failAudio(item, error) {
   if (currentAudio !== item || item?.epoch !== audioEpoch) return;
+  if (item?.transport === 'hls') {
+    hlsError('HLS playback failed', error, { streamUrl: item.url, generation: item.generation });
+  }
   // Do not send Pause to the desktop reader here. The previous failure path
   // did that, turning a mobile decoding or autoplay rejection into an
   // immediate app-wide pause. Keep the finite clip ready for a user retry.
-  if (item.transport === 'hls') pendingHlsStream = item;
+  if (item.transport === 'hls') {
+    // resetAudioPlayer() tears down the attached source/player; a retry must
+    // attach it again instead of trying to play a destroyed media pipeline.
+    item.prepared = false;
+    pendingHlsStream = item;
+  }
   else audioQueue.unshift({ id: item.id, url: item.url, volume: item.volume });
   audioPrimed = false;
   audioStartNeedsGesture = true;
@@ -530,7 +706,16 @@ audioPlayer.addEventListener('ended', () => {
   void acknowledgeAudio(item.id);
   void playNextAudio();
 });
-audioPlayer.addEventListener('error', () => failAudio(currentAudio, audioPlayer.error));
+audioPlayer.addEventListener('error', () => {
+  const item = currentAudio?.transport === 'hls' ? currentAudio : pendingHlsStream;
+  if (item?.transport === 'hls') {
+    hlsError('the media element raised an HLS error', audioPlayer.error, {
+      streamUrl: item.url,
+      generation: item.generation,
+    });
+  }
+  failAudio(currentAudio, audioPlayer.error);
+});
 audioPlayer.addEventListener('loadedmetadata', updateMediaSessionPosition);
 audioPlayer.addEventListener('timeupdate', updateMediaSessionPosition);
 
@@ -716,8 +901,23 @@ splitter.addEventListener('pointerdown', (event) => {
 async function startRemoteSession() {
   try {
     configureMediaSession();
-    const capabilities = await bridge('set_audio_capabilities', supportsNativeHls());
-    if (supportsNativeHls() && !capabilities.hls && capabilities.message) {
+    selectedHlsTransport = getHlsTransport();
+    const hlsRequested = selectedHlsTransport !== null;
+    hlsLog('probing playback capability', {
+      isMobile: isMobileDevice(),
+      nativeHls: supportsNativeHls(),
+      mseHls: supportsMseHls(),
+      selectedHlsTransport,
+      hlsRequested,
+      canPlayType: {
+        standard: audioPlayer.canPlayType('application/vnd.apple.mpegurl'),
+        audio: audioPlayer.canPlayType('audio/mpegurl'),
+      },
+    });
+    const capabilities = await bridge('set_audio_capabilities', hlsRequested);
+    hlsLog('server selected an audio transport', capabilities);
+    if (!capabilities.hls) selectedHlsTransport = null;
+    if (hlsRequested && !capabilities.hls && capabilities.message) {
       notify(capabilities.message, true);
     }
     applyState(await bridge('get_state'));
@@ -745,6 +945,17 @@ async function startRemoteSession() {
     notify(error.message || 'Could not connect to Voice Reader.', true);
   }
 }
+
+window.addEventListener('pagehide', () => {
+  if (!remoteMode || !audioClientId) return;
+  const payload = JSON.stringify({ client_id: audioClientId });
+  try {
+    navigator.sendBeacon('/api/audio-release', new Blob([payload], { type: 'application/json' }));
+  } catch (_) {
+    // The server will release ownership when it is restarted if the browser
+    // cannot deliver this best-effort unload notification.
+  }
+});
 
 let bridgeReady = false;
 async function initializeBridge() {

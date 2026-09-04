@@ -51,7 +51,9 @@ def _ffmpeg_executable() -> Optional[str]:
         candidates.extend(("/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg", "/opt/homebrew/bin/ffmpeg"))
     for candidate in candidates:
         if candidate and os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            _hls_log(f"using FFmpeg encoder at {candidate}")
             return candidate
+    _hls_log("FFmpeg was not found; HLS cannot be enabled and WAV fallback is required")
     return None
 
 
@@ -70,6 +72,7 @@ _STATIC_ASSETS = {
         ("webapp", "vendor", "phosphor-icons", "regular", "Phosphor.woff2"),
         "font/woff2",
     ),
+    "/vendor/hls.min.js": (("webapp", "vendor", "hls.min.js"), "application/javascript; charset=utf-8"),
 }
 
 
@@ -119,6 +122,16 @@ _HLS_START_SEGMENTS = 6
 _HLS_CACHE_SEGMENTS = 90
 
 
+def _hls_log(message: str) -> None:
+    """Emit diagnostics for the mobile streaming path.
+
+    This is deliberately separate from the normal reader status text: HLS
+    failures otherwise happen inside an encoder subprocess or a media element
+    and are nearly impossible to diagnose from the desktop window.
+    """
+    print(f"[HLS] {message}", flush=True)
+
+
 class _HLSStream:
     """Encode a continuous PCM source into a rolling live HLS cache.
 
@@ -138,6 +151,10 @@ class _HLSStream:
         self._finalized = False
         self._error: Optional[str] = None
         self._changed = threading.Condition()
+        _hls_log(
+            f"stream {self.id} (generation {self.generation}) creating "
+            f"AAC/fMP4 encoder in {self._directory}"
+        )
         try:
             self._process = subprocess.Popen(
                 [
@@ -179,11 +196,17 @@ class _HLSStream:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
             )
+            _hls_log(
+                f"stream {self.id} encoder started: {ffmpeg_path} "
+                f"({_HLS_SAMPLE_RATE} Hz mono PCM -> AAC, "
+                f"{_HLS_SEGMENT_DURATION:g}s segments)"
+            )
         except OSError as error:
             self._process = None
             self._accepting = False
             self._finalized = True
             self._error = f"Could not start HLS encoder: {error}"
+            _hls_log(f"stream {self.id} FAILED to start encoder: {error}")
         self._worker = threading.Thread(
             target=self._write_pcm,
             name=f"voice-reader-hls-{generation}",
@@ -197,8 +220,18 @@ class _HLSStream:
             return True
         with self._changed:
             if not self._accepting or self._aborted or self._error:
+                _hls_log(
+                    f"stream {self.id} rejected {len(pcm)} PCM bytes "
+                    f"(accepting={self._accepting}, aborted={self._aborted}, "
+                    f"error={self._error!r})"
+                )
                 return False
         self._encode_queue.put(bytes(pcm))
+        _hls_log(
+            f"stream {self.id} queued {len(pcm)} PCM bytes "
+            f"({len(pcm) / _HLS_BYTES_PER_SECOND:.3f}s; "
+            f"queue depth {self._encode_queue.qsize()})"
+        )
         return True
 
     def close(self) -> None:
@@ -207,6 +240,7 @@ class _HLSStream:
             if not self._accepting:
                 return
             self._accepting = False
+        _hls_log(f"stream {self.id} closing PCM input; flushing final media segment")
         self._encode_queue.put(None)
 
     def abort(self) -> None:
@@ -218,6 +252,7 @@ class _HLSStream:
             self._aborted = True
             process = self._process
             self._changed.notify_all()
+        _hls_log(f"stream {self.id} aborted; terminating encoder and discarding cache")
         if process is not None and process.poll() is None:
             process.terminate()
         self._encode_queue.put(None)
@@ -234,8 +269,16 @@ class _HLSStream:
             if playlist is not None:
                 segments = [line for line in playlist.splitlines() if line.endswith(".m4s")]
                 if len(segments) >= _HLS_START_SEGMENTS or finalized:
+                    _hls_log(
+                        f"stream {self.id} playlist ready with {len(segments)} segment(s) "
+                        f"(finalized={finalized})"
+                    )
                     return self._rewrite_playlist(playlist)
             if time.monotonic() >= deadline:
+                _hls_log(
+                    f"stream {self.id} playlist timed out after {timeout:g}s "
+                    f"(finalized={finalized}, error={self.error!r})"
+                )
                 return None
             time.sleep(0.1)
 
@@ -252,6 +295,12 @@ class _HLSStream:
     def error(self) -> Optional[str]:
         with self._changed:
             return self._error
+
+    @property
+    def accepting(self) -> bool:
+        """Whether this stream can still receive PCM for a new playback run."""
+        with self._changed:
+            return self._accepting and not self._aborted and self._error is None
 
     def _write_pcm(self) -> None:
         process = self._process
@@ -273,11 +322,16 @@ class _HLSStream:
             with self._changed:
                 if not self._aborted:
                     self._error = f"Could not encode HLS audio: {error}"
+                    _hls_log(f"stream {self.id} ENCODER ERROR: {self._error}")
         finally:
             with self._changed:
                 self._finalized = True
                 aborted = self._aborted
                 self._changed.notify_all()
+            _hls_log(
+                f"stream {self.id} encoder finalized "
+                f"(aborted={aborted}, error={self._error!r})"
+            )
             if process is not None and process.stderr is not None:
                 process.stderr.close()
             if aborted:
@@ -324,6 +378,7 @@ class WebInterfaceServer:
         self._hls_enabled = False
         self._hls_stream: Optional[_HLSStream] = None
         self._hls_generation = 0
+        self._audio_client_id: Optional[str] = None
 
     @property
     def is_running(self) -> bool:
@@ -381,6 +436,8 @@ class WebInterfaceServer:
             self._server = None
             self._thread = None
             self._port = None
+            self._audio_client_id = None
+            self._hls_enabled = False
             self._audio.clear()
             waiters = list(self._audio_waiters.values())
             self._audio_waiters.clear()
@@ -546,16 +603,40 @@ class WebInterfaceServer:
             self._state.buffered_items.clear()
         self._broadcast("state", self.current_state())
 
-    def set_audio_capabilities(self, hls: bool) -> dict:
-        """Select HLS only when the connected browser supports native playback."""
+    def set_audio_capabilities(self, hls: bool, client_id: str = "test-client") -> dict:
+        """Choose one audio owner and its transport for this shared session."""
         enabled = bool(hls and self._ffmpeg_path)
         with self._lock:
+            if self._audio_client_id not in (None, client_id):
+                _hls_log(
+                    f"client {client_id} was refused; audio belongs to "
+                    f"client {self._audio_client_id}"
+                )
+                return {
+                    "ok": False,
+                    "hls": False,
+                    "message": "Audio is already controlled by another browser in this sharing session.",
+                }
+            self._audio_client_id = client_id
             self._hls_enabled = enabled
+        _hls_log(
+            f"audio client {client_id} requested HLS={hls}; "
+            f"FFmpeg={'available' if self._ffmpeg_path else 'missing'}; "
+            f"server selected HLS={enabled}"
+        )
         return {
             "ok": True,
             "hls": enabled,
             **({"message": "HLS encoding is unavailable; using WAV clips."} if hls and not enabled else {}),
         }
+
+    def release_audio_client(self, client_id: str) -> None:
+        """Allow a reloaded or closed browser to claim the single audio session."""
+        with self._lock:
+            if self._audio_client_id != client_id:
+                return
+            self._audio_client_id = None
+        _hls_log(f"audio client {client_id} released the sharing session")
 
     @property
     def hls_audio_enabled(self) -> bool:
@@ -566,8 +647,17 @@ class WebInterfaceServer:
         """Create a fresh server-owned live playlist for a browser read."""
         with self._lock:
             if not self._hls_enabled or not self._ffmpeg_path or not self.is_running:
+                _hls_log(
+                    "did not create a stream "
+                    f"(enabled={self._hls_enabled}, ffmpeg={bool(self._ffmpeg_path)}, "
+                    f"server_running={self.is_running})"
+                )
                 return None
             previous = self._hls_stream
+            if previous is not None and previous.accepting:
+                url = f"/api/hls/{previous.id}/playlist.m3u8"
+                _hls_log(f"reusing prepared HLS stream {previous.id} at {url}")
+                return url
             self._hls_generation += 1
             stream = _HLSStream(self._hls_generation, self._ffmpeg_path)
             self._hls_stream = stream
@@ -575,24 +665,46 @@ class WebInterfaceServer:
         if previous is not None:
             previous.abort()
         url = f"/api/hls/{stream.id}/playlist.m3u8"
+        _hls_log(f"stream {stream.id} announced at {url}")
         self._broadcast("hls-stream", {"url": url, "generation": stream.generation})
         return url
 
     def append_hls_audio(self, pcm: bytes) -> bool:
         with self._lock:
             stream = self._hls_stream
+        if stream is None:
+            _hls_log(f"dropped {len(pcm)} PCM bytes because no HLS stream is active")
         return bool(stream and stream.append(pcm))
 
     def finish_hls_audio(self) -> None:
         with self._lock:
             stream = self._hls_stream
         if stream is not None:
+            _hls_log(f"finishing HLS stream {stream.id}")
             stream.close()
 
     def get_hls_stream(self, stream_id: str) -> Optional[_HLSStream]:
         with self._lock:
             stream = self._hls_stream
             return stream if stream and stream.id == stream_id else None
+
+    def wait_for_hls_stream(self, timeout: float = 30.0) -> Optional[_HLSStream]:
+        """Wait for the stream created by a user-authorized Play request.
+
+        The browser can load this stable endpoint *inside the tap* that starts
+        playback, before the desktop UI has processed that control request and
+        created a generation-specific playlist URL.
+        """
+        deadline = time.monotonic() + timeout
+        while True:
+            with self._lock:
+                stream = self._hls_stream
+                enabled = self._hls_enabled
+            if stream is not None:
+                return stream
+            if not enabled or time.monotonic() >= deadline:
+                return None
+            time.sleep(0.05)
 
     def publish_wav(self, pcm: bytes, duration: float, volume: float) -> Optional[str]:
         """Publish one complete, standards-compliant WAV clip to the browser.
@@ -686,6 +798,7 @@ class WebInterfaceServer:
             hls_stream = self._hls_stream
             self._hls_stream = None
         if hls_stream is not None:
+            _hls_log(f"interrupting HLS stream {hls_stream.id}")
             hls_stream.abort()
         for waiter in waiters:
             waiter.event.set()
@@ -810,7 +923,11 @@ class _WebRequestHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(content)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
-        self.wfile.write(content)
+        try:
+            self.wfile.write(content)
+        except (BrokenPipeError, ConnectionResetError):
+            if urlsplit(self.path).path.startswith("/api/hls/"):
+                _hls_log(f"client disconnected while receiving {urlsplit(self.path).path}")
 
     def do_GET(self) -> None:
         if self.path == "/" or self.path == "/index.html":
@@ -845,15 +962,29 @@ class _WebRequestHandler(BaseHTTPRequestHandler):
         if path.startswith("/api/hls/"):
             parts = path.split("/")
             if len(parts) == 5 and parts[4] == "playlist.m3u8":
-                stream = self.web_interface.get_hls_stream(parts[3])
+                stream_id = parts[3]
+                stream = (
+                    self.web_interface.wait_for_hls_stream()
+                    if stream_id == "live"
+                    else self.web_interface.get_hls_stream(stream_id)
+                )
+                _hls_log(
+                    f"playlist requested for stream {stream_id} "
+                    f"({'active' if stream else 'missing/expired'})"
+                )
                 playlist = stream.playlist() if stream else None
                 if playlist is None:
+                    _hls_log(
+                        f"playlist for stream {stream_id} unavailable: "
+                        f"{stream.error if stream and stream.error else 'not ready'}"
+                    )
                     self._send(
                         HTTPStatus.SERVICE_UNAVAILABLE,
                         "text/plain; charset=utf-8",
                         (stream.error if stream and stream.error else "HLS stream is not ready").encode("utf-8"),
                     )
                 else:
+                    _hls_log(f"serving playlist for stream {stream_id} ({len(playlist)} bytes)")
                     self._send(
                         HTTPStatus.OK,
                         "application/vnd.apple.mpegurl",
@@ -864,8 +995,10 @@ class _WebRequestHandler(BaseHTTPRequestHandler):
                 stream = self.web_interface.get_hls_stream(parts[3])
                 content = stream.initialization() if stream else None
                 if content is None:
+                    _hls_log(f"initialization segment missing for stream {parts[3]}")
                     self._send(HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8", b"HLS initialization expired")
                 else:
+                    _hls_log(f"serving initialization segment for stream {parts[3]} ({len(content)} bytes)")
                     self._send(HTTPStatus.OK, "audio/mp4", content)
                 return
             if len(parts) == 6 and parts[4] == "segment" and parts[5].endswith(".m4s"):
@@ -876,8 +1009,13 @@ class _WebRequestHandler(BaseHTTPRequestHandler):
                     sequence = -1
                 content = stream.segment(sequence) if stream and sequence >= 0 else None
                 if content is None:
+                    _hls_log(f"media segment {sequence} missing for stream {parts[3]}")
                     self._send(HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8", b"HLS segment expired")
                 else:
+                    _hls_log(
+                        f"serving media segment {sequence} for stream {parts[3]} "
+                        f"({len(content)} bytes)"
+                    )
                     self._send(HTTPStatus.OK, "video/iso.segment", content)
                 return
         if self.path.startswith("/api/audio/") and self.path.endswith(".wav"):
@@ -895,15 +1033,15 @@ class _WebRequestHandler(BaseHTTPRequestHandler):
         self._send(HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8", b"Not found")
 
     def do_POST(self) -> None:
-        if self.path == "/api/audio-capabilities":
+        if self.path == "/api/audio-release":
             try:
                 length = int(self.headers.get("Content-Length", "0"))
                 if length > 1_000:
                     raise ValueError("Request is too large.")
                 payload = json.loads(self.rfile.read(length).decode("utf-8"))
-                hls = payload.get("hls") if isinstance(payload, dict) else None
-                if not isinstance(hls, bool):
-                    raise ValueError("HLS capability is required.")
+                client_id = payload.get("client_id") if isinstance(payload, dict) else None
+                if not isinstance(client_id, str) or not 1 <= len(client_id) <= 128:
+                    raise ValueError("Audio client id is required.")
             except (UnicodeDecodeError, ValueError, json.JSONDecodeError) as error:
                 self._send(
                     HTTPStatus.BAD_REQUEST,
@@ -911,9 +1049,35 @@ class _WebRequestHandler(BaseHTTPRequestHandler):
                     json.dumps({"ok": False, "message": str(error)}).encode("utf-8"),
                 )
                 return
-            result = self.web_interface.set_audio_capabilities(hls)
+            self.web_interface.release_audio_client(client_id)
             self._send(
                 HTTPStatus.OK,
+                "application/json; charset=utf-8",
+                b'{"ok": true}',
+            )
+            return
+        if self.path == "/api/audio-capabilities":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if length > 1_000:
+                    raise ValueError("Request is too large.")
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                hls = payload.get("hls") if isinstance(payload, dict) else None
+                client_id = payload.get("client_id") if isinstance(payload, dict) else None
+                if not isinstance(hls, bool):
+                    raise ValueError("HLS capability is required.")
+                if not isinstance(client_id, str) or not 1 <= len(client_id) <= 128:
+                    raise ValueError("Audio client id is required.")
+            except (UnicodeDecodeError, ValueError, json.JSONDecodeError) as error:
+                self._send(
+                    HTTPStatus.BAD_REQUEST,
+                    "application/json; charset=utf-8",
+                    json.dumps({"ok": False, "message": str(error)}).encode("utf-8"),
+                )
+                return
+            result = self.web_interface.set_audio_capabilities(hls, client_id)
+            self._send(
+                HTTPStatus.OK if result["ok"] else HTTPStatus.CONFLICT,
                 "application/json; charset=utf-8",
                 json.dumps(result).encode("utf-8"),
             )
