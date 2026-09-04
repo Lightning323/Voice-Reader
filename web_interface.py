@@ -6,15 +6,16 @@ application can expose its browser controls without another install step.
 
 from __future__ import annotations
 
-from collections import deque
 from dataclasses import dataclass, field
+import io
 import os
 import json
 import socket
-import struct
 import sys
 import threading
+import time
 import uuid
+import wave
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Callable, Optional
@@ -76,89 +77,12 @@ class _WebState:
         }
 
 
-class _PCMStream:
-    """A single, continuous 24 kHz PCM stream for browser playback.
+@dataclass
+class _AudioWaiter:
+    """Synchronize the next finite browser clip with the playback worker."""
 
-    A mobile browser is allowed to keep an active media resource playing when
-    its page is backgrounded, but it may suspend JavaScript between resources.
-    Keeping all generated PCM on one HTTP response avoids requiring a browser
-    callback between every spoken line.
-    """
-
-    def __init__(self, generation: int) -> None:
-        self.id = uuid.uuid4().hex
-        self.generation = generation
-        self._chunks: deque[bytes] = deque()
-        self._closed = False
-        self._consumer_active = False
-        self._changed = threading.Condition()
-
-    def append(self, pcm: bytes) -> bool:
-        if not pcm:
-            return True
-        with self._changed:
-            if self._closed:
-                return False
-            # A stream is normally claimed immediately by the browser.  Keep
-            # only a tiny startup allowance so a missing client cannot make a
-            # full read accumulate in memory, while a temporarily suspended
-            # EventSource connection cannot stop an already-active player.
-            if not self._consumer_active and len(self._chunks) >= 4:
-                return False
-            self._chunks.append(pcm)
-            self._changed.notify_all()
-            return True
-
-    def claim_consumer(self) -> bool:
-        """Allow one browser media connection to consume this live stream."""
-        with self._changed:
-            if self._closed or self._consumer_active:
-                return False
-            self._consumer_active = True
-            return True
-
-    def release_consumer(self) -> None:
-        with self._changed:
-            self._consumer_active = False
-            self._changed.notify_all()
-
-    def close(self) -> None:
-        with self._changed:
-            self._closed = True
-            self._changed.notify_all()
-
-    def chunks(self):
-        """Yield data as it is produced, without ending between speech lines."""
-        while True:
-            with self._changed:
-                self._changed.wait_for(lambda: self._chunks or self._closed)
-                if not self._chunks:
-                    return
-                chunk = self._chunks.popleft()
-            yield chunk
-
-
-def _stream_wav_header() -> bytes:
-    """Return a WAV header for a PCM stream whose final length is unknown."""
-    # RIFF/WAV length fields are 32-bit.  ``0xffffffff`` is the conventional
-    # unknown-length value for a progressive stream; the HTTP response closes
-    # when the reader reaches the end.
-    return struct.pack(
-        "<4sI4s4sIHHIIHH4sI",
-        b"RIFF",
-        0xFFFFFFFF,
-        b"WAVE",
-        b"fmt ",
-        16,
-        1,
-        1,
-        24000,
-        48000,
-        2,
-        16,
-        b"data",
-        0xFFFFFFFF,
-    )
+    event: threading.Event = field(default_factory=threading.Event)
+    completed: bool = False
 
 
 class WebInterfaceServer:
@@ -172,8 +96,8 @@ class WebInterfaceServer:
         self._lock = threading.RLock()
         self._state = _WebState()
         self._listeners: list["queue.Queue"] = []
-        self._audio_stream: Optional[_PCMStream] = None
-        self._audio_generation = 0
+        self._audio: dict[str, tuple[bytes, float]] = {}
+        self._audio_waiters: dict[str, _AudioWaiter] = {}
 
     @property
     def is_running(self) -> bool:
@@ -231,13 +155,14 @@ class WebInterfaceServer:
             self._server = None
             self._thread = None
             self._port = None
-            audio_stream = self._audio_stream
-            self._audio_stream = None
+            self._audio.clear()
+            waiters = list(self._audio_waiters.values())
+            self._audio_waiters.clear()
             listeners = list(self._listeners)
             self._listeners.clear()
 
-        if audio_stream is not None:
-            audio_stream.close()
+        for waiter in waiters:
+            waiter.event.set()
         for listener in listeners:
             listener.put(None)
         if server is not None:
@@ -383,69 +308,98 @@ class WebInterfaceServer:
             self._state.buffered_items.clear()
         self._broadcast("state", self.current_state())
 
-    def prepare_audio_stream(self) -> Optional[str]:
-        """Start a fresh continuous media resource for a browser read."""
+    def publish_wav(self, pcm: bytes, duration: float, volume: float) -> Optional[str]:
+        """Publish one complete, standards-compliant WAV clip to the browser.
+
+        Mobile media engines reliably accept finite WAV resources with a
+        Content-Length. They do not consistently support a chunked WAV whose
+        RIFF and data lengths are unknown, so generated speech is sent as
+        normal WAV files and queued by the browser.
+        """
         if not self.is_running:
             return None
 
-        with self._lock:
-            previous = self._audio_stream
-            previous_generation = self._audio_generation
-            self._audio_generation += 1
-            stream = _PCMStream(self._audio_generation)
-            self._audio_stream = stream
+        audio_id = uuid.uuid4().hex
+        output = io.BytesIO()
+        with wave.open(output, "wb") as wav:
+            wav.setnchannels(1)
+            wav.setsampwidth(2)
+            wav.setframerate(24000)
+            wav.writeframes(pcm)
 
-        if previous is not None:
-            previous.close()
-            # The generation lets a browser ignore this stop notification if
-            # its replacement stream arrived first on a separate HTTP request.
-            self._broadcast("audio-stop", {"generation": previous_generation})
-        url = f"/api/audio-stream/{stream.id}.wav"
+        with self._lock:
+            if not self._listeners:
+                return None
+            # Prune retained clips for a client that left before finishing.
+            now = time.monotonic()
+            self._audio = {
+                key: value for key, value in self._audio.items() if now - value[1] < 300
+            }
+            self._audio[audio_id] = (output.getvalue(), now)
+            self._audio_waiters[audio_id] = _AudioWaiter()
         self._broadcast(
-            "audio-stream", {"url": url, "generation": stream.generation}
+            "audio",
+            {
+                "id": audio_id,
+                "url": f"/api/audio/{audio_id}.wav",
+                "duration": max(0.0, duration),
+                "volume": max(0.0, min(1.0, volume)),
+            },
         )
-        return url
+        return audio_id
 
-    @property
-    def audio_stream_url(self) -> Optional[str]:
+    def get_audio(self, audio_id: str) -> Optional[bytes]:
         with self._lock:
-            stream = self._audio_stream
-            return f"/api/audio-stream/{stream.id}.wav" if stream else None
+            item = self._audio.get(audio_id)
+            return item[0] if item else None
 
-    def append_stream_audio(self, pcm: bytes) -> bool:
-        """Append PCM to the active media resource without a clip boundary."""
+    def complete_audio(self, audio_id: str) -> bool:
+        """Record successful completion of a browser clip."""
         with self._lock:
-            stream = self._audio_stream
-        return bool(stream and stream.append(pcm))
+            waiter = self._audio_waiters.get(audio_id)
+            if waiter is None:
+                return False
+            waiter.completed = True
+            waiter.event.set()
+            return True
 
-    def finish_audio_stream(self) -> None:
-        """Let a natural playback finish instead of force-pausing the player."""
+    def wait_for_audio(self, audio_id: str) -> bool:
+        """Wait for a browser to complete a clip or for playback to stop."""
         with self._lock:
-            stream = self._audio_stream
-        if stream is not None:
-            stream.close()
+            waiter = self._audio_waiters.get(audio_id)
+        if waiter is None:
+            return False
+
+        no_listener_since: Optional[float] = None
+        while not waiter.event.wait(timeout=0.1):
+            with self._lock:
+                if self._listeners:
+                    no_listener_since = None
+                    continue
+            # Mobile browsers can briefly reconnect EventSource when changing
+            # networks or backgrounding the page. Do not turn that transient
+            # reconnect into an immediate playback pause.
+            now = time.monotonic()
+            if no_listener_since is None:
+                no_listener_since = now
+            elif now - no_listener_since >= 15:
+                with self._lock:
+                    self._audio_waiters.pop(audio_id, None)
+                return False
+
+        with self._lock:
+            self._audio_waiters.pop(audio_id, None)
+        return waiter.completed
 
     def interrupt_audio(self) -> None:
-        """Tell clients to immediately discard their current browser audio."""
+        """Tell clients to immediately discard queued and current browser audio."""
         with self._lock:
-            stream = self._audio_stream
-            self._audio_stream = None
-            generation = self._audio_generation
-        if stream is not None:
-            stream.close()
-        self._broadcast("audio-stop", {"generation": generation})
-
-    def get_audio_stream(self, stream_id: str) -> Optional[_PCMStream]:
-        with self._lock:
-            stream = self._audio_stream
-            return stream if stream and stream.id == stream_id else None
-
-    def abandon_audio_stream(self, stream: _PCMStream) -> None:
-        """Stop producing audio when its only browser media connection drops."""
-        with self._lock:
-            if self._audio_stream is stream:
-                self._audio_stream = None
-        stream.close()
+            waiters = list(self._audio_waiters.values())
+            self._audio_waiters.clear()
+            self._audio.clear()
+        for waiter in waiters:
+            waiter.event.set()
+        self._broadcast("audio-stop", {})
 
     def add_listener(self, listener: "queue.Queue") -> None:
         with self._lock:
@@ -485,14 +439,7 @@ class WebInterfaceServer:
                 app.seek_forward()
 
         app.ui(apply_control)
-        result = {"ok": True, "message": "Command sent."}
-        if action == "play":
-            stream_url = self.audio_stream_url
-            if stream_url:
-                result["stream_url"] = stream_url
-                with self._lock:
-                    result["stream_generation"] = self._audio_generation
-        return result
+        return {"ok": True, "message": "Command sent."}
 
     def schedule_ui_action(self, payload: dict) -> dict:
         """Apply a non-playback action from the shared version of the UI."""
@@ -604,21 +551,43 @@ class _WebRequestHandler(BaseHTTPRequestHandler):
         if self.path == "/api/events":
             self._serve_events()
             return
-        if self.path.startswith("/api/audio-stream/") and self.path.endswith(".wav"):
-            stream_id = self.path.removeprefix("/api/audio-stream/").removesuffix(".wav")
-            stream = self.web_interface.get_audio_stream(stream_id)
-            if stream is None:
+        if self.path.startswith("/api/audio/") and self.path.endswith(".wav"):
+            audio_id = self.path.removeprefix("/api/audio/").removesuffix(".wav")
+            audio = self.web_interface.get_audio(audio_id)
+            if audio is None:
                 self._send(
                     HTTPStatus.NOT_FOUND,
                     "text/plain; charset=utf-8",
-                    b"Audio stream expired",
+                    b"Audio clip expired",
                 )
             else:
-                self._serve_audio_stream(stream)
+                self._send(HTTPStatus.OK, "audio/wav", audio)
             return
         self._send(HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8", b"Not found")
 
     def do_POST(self) -> None:
+        if self.path == "/api/audio-complete":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if length > 1_000:
+                    raise ValueError("Request is too large.")
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                audio_id = payload.get("id") if isinstance(payload, dict) else None
+                if not isinstance(audio_id, str):
+                    raise ValueError("Audio id is required.")
+            except (UnicodeDecodeError, ValueError, json.JSONDecodeError) as error:
+                self._send(
+                    HTTPStatus.BAD_REQUEST,
+                    "application/json; charset=utf-8",
+                    json.dumps({"ok": False, "message": str(error)}).encode("utf-8"),
+                )
+                return
+            self._send(
+                HTTPStatus.OK,
+                "application/json; charset=utf-8",
+                json.dumps({"ok": self.web_interface.complete_audio(audio_id)}).encode("utf-8"),
+            )
+            return
         if self.path == "/api/ui":
             try:
                 length = int(self.headers.get("Content-Length", "0"))
@@ -664,44 +633,6 @@ class _WebRequestHandler(BaseHTTPRequestHandler):
             "application/json; charset=utf-8",
             json.dumps(result).encode("utf-8"),
         )
-
-    def _serve_audio_stream(self, stream: _PCMStream) -> None:
-        """Keep one HTTP audio response open while the reader produces PCM."""
-        if not stream.claim_consumer():
-            self._send(
-                HTTPStatus.CONFLICT,
-                "text/plain; charset=utf-8",
-                b"This live audio stream is already in use.",
-            )
-            return
-
-        self.send_response(HTTPStatus.OK)
-        self.send_header("Content-Type", "audio/wav")
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("Accept-Ranges", "none")
-        self.send_header("Transfer-Encoding", "chunked")
-        self.end_headers()
-        disconnected = False
-        try:
-            self._write_chunk(_stream_wav_header())
-            for pcm in stream.chunks():
-                self._write_chunk(pcm)
-            self.wfile.write(b"0\r\n\r\n")
-            self.wfile.flush()
-        except (BrokenPipeError, ConnectionResetError):
-            disconnected = True
-        finally:
-            stream.release_consumer()
-            if disconnected:
-                self.web_interface.abandon_audio_stream(stream)
-            # A stream never has a content length, so it owns this connection.
-            self.close_connection = True
-
-    def _write_chunk(self, content: bytes) -> None:
-        self.wfile.write(f"{len(content):X}\r\n".encode("ascii"))
-        self.wfile.write(content)
-        self.wfile.write(b"\r\n")
-        self.wfile.flush()
 
     def _serve_events(self) -> None:
         # Imported lazily so the module's non-server users have no extra state.

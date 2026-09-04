@@ -16,9 +16,12 @@ let textTimer;
 let lastActiveRange = '';
 let highlightRenderFrame;
 const remoteMode = ['http:', 'https:'].includes(window.location.protocol);
+let audioQueue = [];
 let audioPlaying = false;
 let currentAudio = null;
-let audioGeneration = 0;
+let audioEpoch = 0;
+let audioPrimed = false;
+let audioStartNeedsGesture = false;
 let silentAudioUrl = null;
 
 function setMediaSessionPlaybackState(playbackState) {
@@ -357,10 +360,22 @@ window.VoiceReaderDesktop = { applyState };
 
 async function control(action) {
   try {
-    if (remoteMode && action === 'play') await unlockAudio();
+    if (remoteMode && action === 'play') {
+      audioStartNeedsGesture = false;
+      // Call play() synchronously from this tap. Awaiting it before making the
+      // call to play the first real clip would lose the mobile user gesture.
+      // Once this element is primed, Safari permits source changes on it.
+      void unlockAudio().then(() => {
+        audioPrimed = true;
+        void playNextAudio();
+      }).catch((error) => {
+        audioPrimed = false;
+        audioStartNeedsGesture = true;
+        notify(`Audio needs a tap to start: ${error?.message || 'playback was blocked.'}`, true);
+      });
+    }
     const result = await bridge('control', action, script.value);
     if (!result.ok) notify(result.message || 'The command could not be completed.', true);
-    else if (remoteMode && action === 'play' && result.stream_url) await startAudioStream(result.stream_url, result.stream_generation);
   } catch (error) { notify(error.message, true); }
 }
 
@@ -378,7 +393,7 @@ function updatePlayPause(isPlaying) {
 async function unlockAudio() {
   // Mobile browsers require the media element to begin playback from a
   // user gesture. Keep this exact element playing a silent loop until a
-  // generated stream arrives; pausing it here can make the real stream fail
+  // generated clip arrives; pausing it here can make the real clip fail
   // the browser's autoplay policy.
   await keepAudioSessionAlive();
 }
@@ -416,29 +431,35 @@ function resetAudioPlayer() {
   audioPlayer.load();
 }
 
-function failAudio(item, error) {
-  if (currentAudio !== item) return;
-  resetAudioPlayer();
-  updateMediaSession();
-  notify(`Audio error: ${error?.message || 'Unable to play the stream.'}`, true);
-  // The server cannot safely continue sending audio after its one media
-  // resource has failed, so make this an explicit paused state.
-  void control('pause');
+async function acknowledgeAudio(id) {
+  try { await remoteRequest('/api/audio-complete', { id }); }
+  catch (error) { notify(`Could not confirm audio playback: ${error?.message || 'connection lost.'}`, true); }
 }
 
-async function startAudioStream(url, generation = audioGeneration) {
-  if (Number.isFinite(generation) && generation < audioGeneration) return;
-  if (Number.isFinite(generation)) audioGeneration = generation;
-  const streamUrl = new URL(url, window.location.href).href;
-  if (currentAudio?.url === streamUrl && audioPlaying) return;
-  const item = { url: streamUrl, generation: audioGeneration };
+function failAudio(item, error) {
+  if (currentAudio !== item || item?.epoch !== audioEpoch) return;
+  // Do not send Pause to the desktop reader here. The previous failure path
+  // did that, turning a mobile decoding or autoplay rejection into an
+  // immediate app-wide pause. Keep the finite clip ready for a user retry.
+  audioQueue.unshift({ id: item.id, url: item.url, volume: item.volume });
+  audioPrimed = false;
+  audioStartNeedsGesture = true;
+  resetAudioPlayer();
+  updateMediaSession();
+  notify(`Audio could not start: ${error?.message || 'tap Play to retry.'}`, true);
+}
+
+async function playNextAudio() {
+  if (audioPlaying || !audioPrimed || !audioQueue.length) return;
+  const item = { ...audioQueue.shift(), epoch: audioEpoch };
   audioPlaying = true;
   currentAudio = item;
   updateMediaSession();
   try {
     audioPlayer.loop = false;
-    audioPlayer.src = streamUrl;
-    audioPlayer.volume = 1;
+    audioPlayer.src = item.url;
+    const volume = Number(item.volume);
+    audioPlayer.volume = Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : 1;
     audioPlayer.load();
     await audioPlayer.play();
     if (currentAudio === item) updateMediaSession();
@@ -449,20 +470,20 @@ async function startAudioStream(url, generation = audioGeneration) {
 
 audioPlayer.addEventListener('ended', () => {
   const item = currentAudio;
-  if (!item) return;
+  if (!item || item.epoch !== audioEpoch) return;
   currentAudio = null;
   audioPlaying = false;
   updateMediaSession();
-  // A normal end comes from the desktop reader closing the continuous stream
-  // after its final samples.  Do not attempt to start another source here:
-  // mobile browsers may have suspended this page by the time it fires.
-  if (state.playback_mode) void control('pause');
+  void acknowledgeAudio(item.id);
+  void playNextAudio();
 });
 audioPlayer.addEventListener('error', () => failAudio(currentAudio, audioPlayer.error));
 audioPlayer.addEventListener('loadedmetadata', updateMediaSessionPosition);
 audioPlayer.addEventListener('timeupdate', updateMediaSessionPosition);
 
-$('#play-pause').addEventListener('click', () => control(state.playback_mode ? 'pause' : 'play'));
+$('#play-pause').addEventListener('click', () => control(
+  state.playback_mode && !audioStartNeedsGesture ? 'pause' : 'play'
+));
 $('#back').addEventListener('click', () => control('back'));
 $('#forward').addEventListener('click', () => control('forward'));
 $('#stop').addEventListener('click', () => control('stop'));
@@ -645,14 +666,15 @@ async function startRemoteSession() {
     applyState(await bridge('get_state'));
     const events = new EventSource('/api/events');
     events.addEventListener('state', (event) => applyState(JSON.parse(event.data)));
-    events.addEventListener('audio-stream', (event) => {
-      const { url, generation } = JSON.parse(event.data);
-      if (url) void startAudioStream(url, generation);
+    events.addEventListener('audio', (event) => {
+      audioQueue.push(JSON.parse(event.data));
+      void playNextAudio();
     });
     events.addEventListener('audio-stop', (event) => {
-      const { generation } = JSON.parse(event.data);
-      if (Number.isFinite(generation) && generation < audioGeneration) return;
-      if (Number.isFinite(generation)) audioGeneration = generation;
+      audioEpoch += 1;
+      audioQueue = [];
+      audioPrimed = false;
+      audioStartNeedsGesture = false;
       resetAudioPlayer();
       setMediaSessionPlaybackState('paused');
     });

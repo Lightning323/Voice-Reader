@@ -62,11 +62,6 @@ def start_playback(readerUI):
     with playback_state_lock:
         allow_playback = True
         play_event.set()
-        # The remote player must have one long-lived media source before the
-        # playback worker begins publishing PCM.  Mobile browsers can suspend
-        # page JavaScript in the background, but continue consuming an active
-        # HTML media stream.
-        readerUI.web_prepare_audio_stream()
 
     print("Started")
     readerUI.playback_mode(True)
@@ -120,9 +115,6 @@ def finish_playback(readerUI):
         cached_text = ""
         generation_stop.set()
 
-    # Closing the stream tells the browser where the media ends, but lets it
-    # play the final buffered seconds instead of treating completion as Pause.
-    readerUI.web_finish_audio_stream()
     readerUI.playback_mode(False)
     readerUI.set_status("Stopped")
 
@@ -267,38 +259,43 @@ def play_audio(readerUI, audio_chunks, volume_multiplier, end_offset):
 
 
 def play_web_audio(readerUI, audio_chunks, volume_multiplier, end_offset):
-    """Append one line to the browser's persistent PCM media stream.
+    """Queue valid, finite WAV clips while preserving playback timing.
 
-    The old per-clip acknowledgement protocol relied on JavaScript running at
-    every clip boundary.  That is exactly the work mobile browsers may defer
-    while the page is backgrounded.  The playback worker now supplies timing;
-    the browser only has to keep consuming its one active media resource.
+    A continuous, chunked WAV has no valid final RIFF length and fails in
+    mobile media engines. The browser keeps one audio element and queues these
+    complete files instead, which preserves the user-gesture permission while
+    giving every device a normal WAV resource to decode.
     """
+    clips = []
+
     if audio_chunks is None:
         duration = max(1, 1 + end_offset)
-        if not readerUI.web_stream_audio(b"\0\0" * round(duration * 24000)):
+        clips.append((b"\0\0" * round(duration * 24000), duration))
+    else:
+        for audio in audio_chunks:
+            pcm = np.clip(
+                audio.detach().cpu().numpy().flatten() * 32767,
+                -32768,
+                32767,
+            ).astype(np.int16)
+            clips.append((pcm.tobytes(), len(pcm) / 24000))
+
+        # Preserve pauses as a proper silent WAV clip. A negative interruption
+        # offset intentionally has no added pause, as with desktop playback.
+        pause_duration = max(0.01, end_offset)
+        clips.append((b"\0\0" * round(pause_duration * 24000), pause_duration))
+
+    audio_ids = []
+    for pcm, duration in clips:
+        audio_id = readerUI.web_send_audio(pcm, duration, volume_multiplier)
+        if not audio_id:
             return True
-        return delay_unless_interrupted(None, duration)
+        audio_ids.append(audio_id)
 
-    pcm_parts = []
-    duration = 0.0
-    for audio in audio_chunks:
-        pcm = np.clip(
-            audio.detach().cpu().numpy().flatten() * volume_multiplier * 32767,
-            -32768,
-            32767,
-        ).astype(np.int16)
-        pcm_parts.append(pcm.tobytes())
-        duration += len(pcm) / 24000
-
-    # Preserve pauses as PCM silence so the browser never reaches the end of a
-    # media resource between spoken lines.  A negative interruption offset
-    # intentionally has no added pause, matching desktop playback.
-    pause_duration = max(0.01, end_offset)
-    pcm_parts.append(b"\0\0" * round(pause_duration * 24000))
-    if not readerUI.web_stream_audio(b"".join(pcm_parts)):
-        return True
-    return delay_unless_interrupted(None, duration + pause_duration)
+    for audio_id in audio_ids:
+        if not readerUI.web_wait_for_audio(audio_id) or not allow_playback:
+            return True
+    return False
 
 """
 Returns True if interrupted

@@ -424,18 +424,15 @@ class VoiceReaderUI:
         if self.is_web_audio_active():
             self.web_server.seek_line(start_line, end_line)
 
-    def web_prepare_audio_stream(self) -> None:
+    def web_send_audio(self, pcm: bytes, duration: float, volume: float):
         if self.is_web_audio_active():
-            self.web_server.prepare_audio_stream()
+            return self.web_server.publish_wav(pcm, duration, volume)
+        return None
 
-    def web_stream_audio(self, pcm: bytes) -> bool:
+    def web_wait_for_audio(self, audio_id: str) -> bool:
         return bool(
-            self.is_web_audio_active() and self.web_server.append_stream_audio(pcm)
+            self.is_web_audio_active() and self.web_server.wait_for_audio(audio_id)
         )
-
-    def web_finish_audio_stream(self) -> None:
-        if self.is_web_audio_active():
-            self.web_server.finish_audio_stream()
 
     def web_interrupt_audio(self) -> None:
         if self.is_web_audio_active():
