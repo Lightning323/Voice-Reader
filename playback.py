@@ -252,7 +252,7 @@ def play_audio(readerUI, audio_chunks, volume_multiplier, end_offset):
             if delay_unless_interrupted(current_channel, duration):
                 return True
             if i == len(audio_chunks) - 1 and delay_unless_interrupted(
-                None, max(0.01, end_offset)
+                None, max(0, end_offset)
             ):
                 return True
 
