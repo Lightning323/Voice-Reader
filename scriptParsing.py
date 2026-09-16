@@ -202,13 +202,16 @@ def parse_script(text, character_voices):
 
 
 def format_line(text, remove_parentheses=True):
-    text = text.replace("…", "...").replace(". . .", "...").replace("—", "-")
+    text = text.replace("…", "...").replace(". . .", "...").replace("—", " - ")
 
     if remove_parentheses:
         text = re.sub(r"\([^)]*\)", "", text)
 
     # Get rid of double spaces
     text = re.sub(r"\s+", " ", text)
+
+    # Repair spaces after apostrophes/backticks in contractions (e.g. "You` re").
+    text = re.sub(r"(?<=\w)[`'’]\s+(?=\w)", "'", text)
 
     # Get rid of dots or dashes if thats all there is
     if text and all(c in ".- " for c in text):
