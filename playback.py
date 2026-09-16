@@ -38,6 +38,23 @@ def set_audio_index(index):
     playback_index = clamp(index, 0, len(audio_queue) - 1)
 
 
+def prepend_sample(sample):
+    """Insert a generated sample at the front of the queue.
+
+    The front insertion pushes the playhead one position to the right, so the
+    playhead index is bumped to keep it pointing at the same line.
+    """
+    global audio_queue, playback_index
+    audio_queue.insert(0, sample)
+    playback_index += 1
+
+
+def append_sample(sample):
+    """Append a generated sample to the end of the queue."""
+    global audio_queue
+    audio_queue.append(sample)
+
+
 def clamp(value, min_value, max_value):
     return max(min(value, max_value), min_value)
 
@@ -176,6 +193,9 @@ def playback_thread(readerUI):
             if allow_playback:
 
                 if playback_index >= len(audio_queue):
+                    # Waiting for the next buffered sample; avoid a hot spin
+                    # while the buffer workers fill in the queue.
+                    time.sleep(0.05)
                     continue
                 sample = audio_queue[playback_index]
                 playback_index += 1

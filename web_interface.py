@@ -254,16 +254,23 @@ class WebInterfaceServer:
         self, text: str, voice: str, start_line: int, end_line: int
     ) -> str:
         item_id = uuid.uuid4().hex
+        item = {
+            "id": item_id,
+            "text": text,
+            "voice": voice,
+            "start_line": start_line,
+            "end_line": end_line,
+        }
         with self._lock:
-            self._state.buffered_items.append(
-                {
-                    "id": item_id,
-                    "text": text,
-                    "voice": voice,
-                    "start_line": start_line,
-                    "end_line": end_line,
-                }
-            )
+            # Buffer workers add lines above and below the playhead in
+            # completion order, so insert by line number to keep the shared
+            # view in reading order.
+            insert_index = len(self._state.buffered_items)
+            for index, existing in enumerate(self._state.buffered_items):
+                if existing["start_line"] > start_line:
+                    insert_index = index
+                    break
+            self._state.buffered_items.insert(insert_index, item)
         self._broadcast("state", self.current_state())
         return item_id
 

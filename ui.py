@@ -150,6 +150,7 @@ class VoiceReaderUI:
         seekRunnable: Optional[Callable] = None,
         modeChangeRunnable: Optional[Callable] = None,
         webServerRunnable: Optional[Callable] = None,
+        rebufferRunnable: Optional[Callable] = None,
     ) -> None:
         self.advanced_mode = not os.path.exists("simple-mode.txt")
         self.playRunnable = playRunnable
@@ -158,6 +159,7 @@ class VoiceReaderUI:
         self.seekRunnable = seekRunnable
         self.modeChangeRunnable = modeChangeRunnable
         self.webServerRunnable = webServerRunnable
+        self.rebufferRunnable = rebufferRunnable
         self.web_server = None
 
         self.speed = _Value(0.9)
@@ -477,6 +479,8 @@ class VoiceReaderUI:
     def set_speed(self, value: float) -> None:
         speed = max(0.4, min(2.5, float(value)))
         self.speed.set(speed)
+        if self.rebufferRunnable:
+            self.rebufferRunnable(self)
         self._publish_state()
 
     def toggle_web_server(self, port: Any) -> dict[str, Any]:
@@ -592,6 +596,8 @@ class VoiceReaderUI:
             character.speed_multiplier = utils.normalize_float(str(speed), 0.5, 10.0)
             character.volume_multiplier = utils.normalize_float(str(volume), 0.0, 1.0)
             characters.save_characters(self._characters, self.dialog_mode)
+        if self.rebufferRunnable:
+            self.rebufferRunnable(self)
         return self._character_response(True)
 
     def run(self) -> None:

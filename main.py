@@ -4,9 +4,22 @@ import sys
 import threading
 import scriptParsing
 import ui
-from playback import playback_thread, seek, start_playback, pause_playback, stop_playback, shutdown_playback,  audio_queue, generation_stop,generation_lock, set_audio_index
+import playback
+from playback import (
+    playback_thread,
+    seek,
+    start_playback,
+    pause_playback,
+    stop_playback,
+    shutdown_playback,
+    set_audio_index,
+    audio_queue,
+    generation_stop,
+    generation_lock,
+    clamp,
+)
 import characters
-import time
+from buffering import AudioBuffer
 from web_interface import WebInterfaceServer
 # ============================================================
 # KOKORO SETUP
@@ -29,169 +42,41 @@ def load_pipeline():
 
 
 # ============================
-# AUDIO GENERATION
+# AUDIO BUFFERING
 # ============================
 
 cached_text = ""
 character_voices = {}
-gen_threads = 0
-latest_gen_id = 0 #Keep track of the last generation ID
-gen_thread_lock = threading.Lock()
-#The fallback voice if no character voice is found
-narrator_voice = characters.Character("am_adam", 1.0, 0.5)
-gen_thread = None
+audio_buffer = AudioBuffer()
 
 
-class AudioSample:
-    def __init__(self, audio, line, volume_multiplier, end_offset):
-        self.audio = audio
-        self.line = line
-        self.volume_multiplier = volume_multiplier
-        self.end_offset = end_offset
-        # The browser UI uses this to remove the item from its buffered text
-        # when playback reaches it.
-        self.web_item_id = None
-        self.web_voice = ""
-
-
-def clamp(value, min_value, max_value):
-    return max(min(value, max_value), min_value)
-
-def get_character_voice(character):
-    if character in character_voices:
-        return character_voices[character]
-    elif "NARRATOR" in character_voices:
-        return character_voices["NARRATOR"]
-    return narrator_voice
-
-# ----------------------------
-# AUDIO GENERATION
-# ---------------------------
-
-def generate_audio(my_gen_id, text, voice, speed):
-    global generated_characters, audio_queue, gen_threads, latest_gen_id
-    generator = load_pipeline()(text, voice=voice, speed=speed)
-    audio_chunks = []
-    for _, _, audio in generator:
-        if should_cancel_generation(my_gen_id):
-            return
-        audio_chunks.append(audio)
-
-    return audio_chunks
-
-def should_cancel_generation(my_gen_id):
-    if generation_stop.is_set():
-        return True
-    with gen_thread_lock: #If we are another thread generating when a new thread starts, cancel this thread
-        if my_gen_id != latest_gen_id:
-            return True
-    return False
-
-def generate(readerUI, scriptLines, source_text):
-    global character_voices, buffer_char_size, gen_threads, latest_gen_id
-    cancel_generation(readerUI, max_iterations=10, delay=0.1) # We will wait up to 1 second for threads to drop to 0 first
-
-    with gen_thread_lock:
-        gen_threads += 1
-
-        #Keep track of the latest thread. If other threads are still running, their ID will be lower than this
-        latest_gen_id += 1
-        my_gen_id = latest_gen_id
-
-        audio_queue.clear()
-        generation_stop.clear() #If we are starting a new generation, clear the stop flag
-        print(f"Generating audio; in thread {my_gen_id}... Generation threads:", gen_threads)
-        set_audio_index(0)
-
-    try:
-        if should_cancel_generation(my_gen_id):
-            return
-        
-        readerUI.set_status("Buffering")
-        readerUI.log("Generating audio...")
-        readerUI.web_begin_buffering(source_text)
-
-        for line in scriptLines:
-            if should_cancel_generation(my_gen_id):
-                return
-
-            speed = 1
-            if readerUI:
-                readerUI.highlight_gen(f"{line.start}.0", f"{line.end}.end")
-                speed = readerUI.speed.get()
-
-            character = get_character_voice(line.character)
-
-            # Calculate how fast to speak a line
-            speed = clamp(
-                speed * character.speed_multiplier * line.speed_multiplier, 0.05, 20
-            )
-            end_offset = line.end_offset / speed
-            volume_multiplier = character.volume_multiplier
-
-            audio_chunks = None
-
-            if line.text.strip() != "": # Generate audio
-                try:
-                    audio_chunks = generate_audio(
-                        my_gen_id,
-                        text=line.text,
-                        voice=character.voice,
-                        speed=speed,
-                    )
-                except Exception as e:
-                    readerUI.log(f"ERROR! Could not generate audio for voice: {character.voice}")
-                    print("Error generating audio:", e)
-
-            if should_cancel_generation(my_gen_id):
-                return
-            sample = AudioSample(audio_chunks, line, volume_multiplier, end_offset)
-            sample.web_item_id = readerUI.web_add_buffered_line(
-                line.text, character.voice, line.start, line.end
-            )
-            sample.web_voice = character.voice
-            audio_queue.append(sample)
-
-        if not should_cancel_generation(my_gen_id):
-            audio_queue.append(None)
-
-    except Exception as e:
-        print("Error generating audio:", e)
-        readerUI.log(f"ERROR! Could not generate audio for line: {line}")
-    finally:
-        with gen_thread_lock:
-            gen_threads -= 1
-            print(f"Generation stopped for thread {my_gen_id}. Total threads:", gen_threads)
-        readerUI.log("Generation stopped.")
+def _current_center_index():
+    """Return the script line currently at the playhead, or 0."""
+    if len(audio_queue) == 0:
+        return 0
+    index = clamp(playback.playback_index, 0, len(audio_queue) - 1)
+    sample = audio_queue[index]
+    if sample is None:
+        return 0
+    return sample.script_index
 
 
 # ============================
 # BUTTON ACTIONS
 # ============================
 
-def cancel_generation(readerUI, max_iterations=5, delay=1):
-    if gen_threads > 0:
-        readerUI.set_status("Cancelling...")
-    for i in range(0, max_iterations):
-        if gen_threads > 0:
-            generation_stop.set()
-            time.sleep(delay)
-        else:
-            break
-
 def play(readerUI, text):
-    global gen_thread, character_voices, cached_text, generation_lock, gen_threads
+    global character_voices, cached_text
 
-    #only generate if text has changed or audio queue is empty
+    # Only regenerate if the text has changed or the audio queue is empty
     should_generate = len(audio_queue) == 0 or (text != cached_text)
 
     if should_generate:
         with generation_lock:
-            # cancel_generation(readerUI, max_iterations=30, delay=0.01, log=False)  # We block here and in the thread itself, but we dont want to wait too long here because it will block the UI
-            print("Preparing to Generating... dialog mode:", readerUI.dialog_mode, "gen threads:", gen_threads)
+            print("Preparing to Generate... dialog mode:", readerUI.dialog_mode)
 
             character_voices = characters.load_characters(readerUI.dialog_mode)
-            if(readerUI.dialog_mode):
+            if readerUI.dialog_mode:
                 script_lines, new_text = scriptParsing.parse_script(text, character_voices)
                 print(len(script_lines), "dialog lines parsed.")
             else:
@@ -199,15 +84,89 @@ def play(readerUI, text):
                 print(len(script_lines), "reader lines parsed.")
                 readerUI.set_script_contents(new_text)
 
-            #Make sure we get cached text EXACTLY as it is in the UI
+            # Make sure we get cached text EXACTLY as it is in the UI
             cached_text = readerUI.get_script_contents()
-
-            gen_thread = threading.Thread(
-                target=generate, args=(readerUI, script_lines, cached_text), daemon=True
+            load_pipeline()
+            audio_buffer.begin(
+                readerUI, script_lines, character_voices, load_pipeline, cached_text
             )
-            gen_thread.start()
-            
+
     start_playback(readerUI)
+
+
+def rebuffer(readerUI):
+    """Regenerate audio around the playhead after speed or voice changes.
+
+    Playback pauses (if it was playing) and the queue is rebuilt from the
+    current position instead of from the very beginning.
+    """
+    global character_voices, cached_text
+
+    if len(audio_queue) == 0:
+        return
+
+    was_playing = playback.allow_playback and not generation_stop.is_set()
+    center = _current_center_index()
+
+    if was_playing:
+        pause_playback(readerUI)
+
+    character_voices = characters.load_characters(readerUI.dialog_mode)
+    text = readerUI.get_script_contents()
+    if readerUI.dialog_mode:
+        script_lines, _ = scriptParsing.parse_script(text, character_voices)
+    else:
+        script_lines, _ = scriptParsing.parse_text(text)
+    cached_text = text
+
+    load_pipeline()
+    audio_buffer.begin(
+        readerUI, script_lines, character_voices, load_pipeline, text,
+        anchor_index=center,
+    )
+
+    if was_playing:
+        start_playback(readerUI)
+
+
+# --------------------------------------------
+# Debounced rebuffering for live setting changes
+# --------------------------------------------
+
+_rebuffer_thread = None
+_rebuffer_pending = False
+_rebuffer_condition = threading.Condition()
+_rebuffer_target = None
+
+
+def schedule_rebuffer(readerUI):
+    """Debounce repeated speed/character changes into one rebuffer pass."""
+    global _rebuffer_thread
+    global _rebuffer_pending, _rebuffer_target
+    with _rebuffer_condition:
+        _rebuffer_target = readerUI
+        _rebuffer_pending = True
+        _rebuffer_condition.notify()
+    if _rebuffer_thread is None:
+        _rebuffer_thread = threading.Thread(
+            target=_rebuffer_loop, name="voice-reader-rebuffer", daemon=True
+        )
+        _rebuffer_thread.start()
+
+
+def _rebuffer_loop():
+    global _rebuffer_pending, _rebuffer_target
+    while True:
+        with _rebuffer_condition:
+            while not _rebuffer_pending:
+                _rebuffer_condition.wait()
+            _rebuffer_pending = False
+            target = _rebuffer_target
+            # A newer change arriving within the window resets the debounce.
+            _rebuffer_condition.wait(timeout=0.35)
+            if _rebuffer_pending:
+                continue
+        rebuffer(target)
 
 
 def change_mode(readerUI, dialog_mode):
@@ -261,6 +220,7 @@ def create_app():
             seekRunnable=seek,
             modeChangeRunnable=change_mode,
             webServerRunnable=toggle_web_server,
+            rebufferRunnable=schedule_rebuffer,
         )
         app.web_server = web_server
         app.set_shutdown_callback(shutdown)
